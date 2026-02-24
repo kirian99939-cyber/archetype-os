@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import Anthropic from '@anthropic-ai/sdk';
+import { ARCHETYPES, type TextRules } from '@/lib/archetypes';
 
 export interface GenerateBannerRequest {
   prompt: string;
@@ -13,39 +15,109 @@ export interface GenerateBannerResponse {
   prompt: string;
 }
 
-function buildImagePrompt(req: GenerateBannerRequest): string {
-  const styleMap: Record<string, string> = {
-    minimal: 'minimalist, clean design, lots of whitespace, modern typography',
-    bold: 'bold colors, strong contrast, impactful typography, dynamic composition',
-    elegant: 'elegant, luxury aesthetic, refined typography, sophisticated color palette',
-    playful: 'playful, vibrant colors, fun typography, energetic composition',
-    corporate: 'professional, corporate, trustworthy, structured layout',
+interface BannerText {
+  headline: string;
+  offer: string;
+  cta: string;
+}
+
+const styleDescriptions: Record<TextRules['style'], string> = {
+  elegant: 'короткий, изысканный, без лишних слов',
+  bold: 'мощный, прямой, энергичный',
+  conversational: 'живой, человечный, разговорный',
+  provocative: 'провокационный, неожиданный, смелый',
+  playful: 'игривый, лёгкий, с юмором',
+  scientific: 'точный, с конкретными фактами и цифрами',
+};
+
+const levelDescriptions: Record<TextRules['level'], string> = {
+  minimal: 'Только название бренда или слоган — 1–3 слова',
+  medium: 'Заголовок 5–7 слов + короткий CTA 2–4 слова. Оффер не нужен.',
+  full: 'Заголовок 5–8 слов + оффер/подзаголовок 8–12 слов + CTA 2–4 слова',
+};
+
+async function generateBannerText(
+  brief: string,
+  archetype: string,
+  textRules: TextRules,
+): Promise<BannerText> {
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+  const message = await client.messages.create({
+    model: 'claude-opus-4-6',
+    max_tokens: 300,
+    messages: [{
+      role: 'user',
+      content: `Ты копирайтер. Придумай текст для рекламного баннера.
+
+Бриф: ${brief}
+Архетип: ${archetype}
+Уровень текста: ${levelDescriptions[textRules.level]}
+Стиль текста: ${styleDescriptions[textRules.style]}
+
+Верни ТОЛЬКО валидный JSON без пояснений:
+{
+  "headline": "${textRules.level === 'minimal' ? 'название бренда или слоган (1-3 слова)' : 'заголовок'}",
+  "offer": "${textRules.includeOffer ? 'оффер или подзаголовок' : ''}",
+  "cta": "${textRules.includeCta ? 'призыв к действию' : ''}"
+}`,
+    }],
+  });
+
+  const content = message.content[0];
+  if (content.type !== 'text') throw new Error('Unexpected Claude response type');
+
+  const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('No JSON in Claude response');
+
+  return JSON.parse(jsonMatch[0]);
+}
+
+function buildImagePrompt(req: GenerateBannerRequest, bannerText: BannerText | null): string {
+  const archetypeVisualMap: Record<string, string> = {
+    mem: 'meme-style layout, bold impact font, internet culture aesthetics',
+    trend: 'trending aesthetic, current visual style, hype atmosphere',
+    aesthetic: 'clean composition, curated color palette, minimal whitespace',
+    cringe: 'intentionally kitschy design, retro clip-art, over-the-top colors',
+    wow: 'cinematic dramatic lighting, hero product shot, epic composition',
+    acid: 'neon colors, glitch effects, cyberpunk vibe, electric atmosphere',
+    zhiza: 'relatable everyday setting, cozy home environment, realistic lifestyle',
+    premium: 'dark luxury background, noble materials, ultra-minimal layout',
+    nostalgia: 'VHS grain, retro color grading, vintage typography, 90s aesthetic',
+    story: 'before/after split, problem-solution visual narrative',
+    social_proof: 'star ratings overlay, testimonial layout, trust badges',
+    shock: 'unexpected visual contrast, paradoxical imagery, attention-grabbing',
+    science: 'laboratory aesthetic, data visualization, clean technical layout',
+    asmr: 'soft lighting, macro texture close-ups, tactile warmth',
+    gamification: 'game UI elements, quest style, progress bars, pixel accents',
+    surreal: 'levitation, impossible physics, dreamlike magical atmosphere',
+    cultural: 'local cultural symbols, traditional patterns, community imagery',
+    hyperbole: 'epic exaggerated scale, over-the-top drama, explosive energy',
+    cinematic: 'movie frame composition, film genre aesthetics, dramatic scene',
+    cat: 'adorable cat with product, soft warm lighting, minimal text space',
+    eco: 'natural green background, organic textures, eco-friendly imagery',
+    cute: 'pastel colors, soft textures, miniature product, kawaii aesthetic',
+    pov: 'first-person perspective, hands in frame, active POV shot',
+    celebrity: 'authoritative presence, intellectual atmosphere, inspired aesthetic',
+    badgood: 'intentionally low-quality look, anti-design, raw unpolished style',
   };
 
-  const archetypeMap: Record<string, string> = {
-    hero: 'heroic, powerful, triumphant, achievement-focused',
-    sage: 'wise, authoritative, knowledge-driven, trustworthy',
-    creator: 'creative, innovative, artistic, imaginative',
-    rebel: 'disruptive, edgy, bold, unconventional',
-    caregiver: 'warm, nurturing, supportive, empathetic',
-    explorer: 'adventurous, free-spirited, discovery-oriented',
-    innocent: 'pure, optimistic, simple, honest',
-    magician: 'transformative, visionary, mystical, inspiring',
-    ruler: 'authoritative, premium, commanding, prestigious',
-    lover: 'passionate, intimate, sensual, relationship-focused',
-    jester: 'fun, humorous, light-hearted, entertaining',
-    everyman: 'relatable, friendly, down-to-earth, accessible',
-  };
+  const archetypeDesc = req.archetype ? (archetypeVisualMap[req.archetype] || req.archetype) : '';
 
-  const styleDesc = req.style ? (styleMap[req.style] || req.style) : 'modern, professional';
-  const archetypeDesc = req.archetype ? (archetypeMap[req.archetype] || req.archetype) : '';
+  const textInstructions: string[] = [];
+  if (bannerText) {
+    if (bannerText.headline) textInstructions.push(`Main headline text: "${bannerText.headline}"`);
+    if (bannerText.offer) textInstructions.push(`Subheadline/offer text: "${bannerText.offer}"`);
+    if (bannerText.cta) textInstructions.push(`CTA button text: "${bannerText.cta}"`);
+  }
 
   return [
     `Advertising banner: ${req.prompt}.`,
-    `Style: ${styleDesc}.`,
-    archetypeDesc ? `Brand archetype mood: ${archetypeDesc}.` : '',
+    archetypeDesc ? `Visual style: ${archetypeDesc}.` : '',
     'High quality, commercial advertising photography, professional graphic design.',
-    'No text or typography in the image.',
+    textInstructions.length > 0
+      ? `Include the following text overlays: ${textInstructions.join('. ')}.`
+      : 'No text or typography in the image.',
     `Aspect ratio optimized for ${req.width && req.height ? `${req.width}x${req.height}` : '16:9'} banner.`,
   ]
     .filter(Boolean)
@@ -77,7 +149,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const imagePrompt = buildImagePrompt(body);
+    // Генерируем текст через Claude если есть textRules для архетипа
+    let bannerText: BannerText | null = null;
+    if (body.archetype) {
+      const archetypeDef = ARCHETYPES.find(a => a.id === body.archetype);
+      if (archetypeDef?.textRules) {
+        try {
+          bannerText = await generateBannerText(body.prompt, body.archetype, archetypeDef.textRules);
+          console.log('[Banner] Generated text:', bannerText);
+        } catch (err) {
+          console.warn('[Banner] Claude text generation failed, skipping:', err);
+        }
+      }
+    }
+
+    const imagePrompt = buildImagePrompt(body, bannerText);
     const aspectRatio = getAspectRatio(body.width, body.height);
 
     const res = await fetch('https://api.nanobananaapi.ai/api/v1/nanobanana/generate-pro', {
