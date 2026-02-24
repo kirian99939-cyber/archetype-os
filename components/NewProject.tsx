@@ -1,0 +1,686 @@
+'use client';
+
+import { useState } from 'react';
+import Image from 'next/image';
+import type { AnalyzeResponse, NewHypothesis } from '@/app/api/analyze/route';
+import { ARCHETYPES } from '@/lib/archetypes';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const PLATFORMS = ['Instagram', 'TikTok', 'VK', 'Telegram', 'YouTube'];
+
+
+const BANNER_FORMATS = [
+  { key: 'feed',    label: 'Feed',    sublabel: '1:1',  width: 1080, height: 1080 },
+  { key: 'stories', label: 'Stories', sublabel: '9:16', width: 1080, height: 1920 },
+  { key: 'banner',  label: 'Banner',  sublabel: '16:9', width: 1280, height: 720  },
+];
+
+const STEP_LABELS = ['Бриф', 'Архетип', 'Гипотезы', 'Баннеры'];
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface Brief {
+  product:   string;
+  price:     string;
+  audience:  string;
+  goal:      string;
+  utp:       string;
+  platforms: string[];
+  context:   string;
+}
+
+interface BannerItem {
+  key:      string;
+  label:    string;
+  sublabel: string;
+  width:    number;
+  height:   number;
+  taskId:   string | null;
+  imageUrl: string | null;
+  loading:  boolean;
+  error:    string | null;
+}
+
+// ─── Small helpers ────────────────────────────────────────────────────────────
+
+const ACCENT = '#C8FF00';
+const ACCENT_BG = 'rgba(200,255,0,0.1)';
+const ACCENT_BORDER = 'rgba(200,255,0,0.25)';
+
+function Spinner() {
+  return (
+    <svg className="animate-spin h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+    </svg>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[10px] uppercase tracking-widest font-semibold mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>
+      {children}
+    </p>
+  );
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function NewProject() {
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+
+  const [brief, setBrief] = useState<Brief>({
+    product: '', price: '', audience: '', goal: '', utp: '', platforms: [], context: '',
+  });
+
+  const [selectedArchetype, setSelectedArchetype] = useState<string | null>(null);
+  const [analyzeResult, setAnalyzeResult]         = useState<AnalyzeResponse | null>(null);
+  const [analyzeLoading, setAnalyzeLoading]       = useState(false);
+  const [analyzeError, setAnalyzeError]           = useState<string | null>(null);
+
+  const [banners, setBanners] = useState<BannerItem[]>(
+    BANNER_FORMATS.map(f => ({ ...f, taskId: null, imageUrl: null, loading: false, error: null }))
+  );
+  const [bannersStarted, setBannersStarted] = useState(false);
+
+  // ── Helpers ──
+
+  const togglePlatform = (p: string) =>
+    setBrief(prev => ({
+      ...prev,
+      platforms: prev.platforms.includes(p)
+        ? prev.platforms.filter(x => x !== p)
+        : [...prev.platforms, p],
+    }));
+
+  const goTo = (n: 1 | 2 | 3 | 4) => setStep(n);
+
+  // ── Step 2: analyze ──
+
+  const handleAnalyze = async () => {
+    setAnalyzeLoading(true);
+    setAnalyzeError(null);
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product:   brief.product,
+          price:     brief.price,
+          audience:  brief.audience,
+          goal:      brief.goal,
+          utp:       brief.utp,
+          platforms: brief.platforms,
+          context:   brief.context,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Неизвестная ошибка' }));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const data: AnalyzeResponse = await res.json();
+      setAnalyzeResult(data);
+      if (data.primaryArchetype && !selectedArchetype) {
+        setSelectedArchetype(data.primaryArchetype);
+      }
+    } catch (err) {
+      setAnalyzeError(err instanceof Error ? err.message : 'Ошибка анализа');
+    } finally {
+      setAnalyzeLoading(false);
+    }
+  };
+
+  // ── Step 4: banners ──
+
+  const pollBanner = (fmtKey: string, taskId: string, attempt = 1) => {
+    const MAX_POLL = 60;
+    const INTERVAL = 5000;
+
+    setTimeout(async () => {
+      try {
+        console.log(`[Banner polling] key=${fmtKey} taskId=${taskId} attempt=${attempt}`);
+        const res = await fetch(`/api/banner-status?taskId=${taskId}`);
+        const data = await res.json();
+        console.log(`[Banner polling] key=${fmtKey} attempt=${attempt} response:`, data);
+
+        if (!res.ok) {
+          setBanners(prev => prev.map(b =>
+            b.key === fmtKey ? { ...b, loading: false, error: data.error || `HTTP ${res.status}` } : b
+          ));
+          return;
+        }
+
+        if (data.ready && data.imageUrl) {
+          setBanners(prev => prev.map(b =>
+            b.key === fmtKey ? { ...b, loading: false, imageUrl: data.imageUrl } : b
+          ));
+          return;
+        }
+
+        if (attempt >= MAX_POLL) {
+          setBanners(prev => prev.map(b =>
+            b.key === fmtKey ? { ...b, loading: false, error: 'Timeout: изображение не готово' } : b
+          ));
+          return;
+        }
+
+        pollBanner(fmtKey, taskId, attempt + 1);
+      } catch (err) {
+        setBanners(prev => prev.map(b =>
+          b.key === fmtKey
+            ? { ...b, loading: false, error: err instanceof Error ? err.message : 'Ошибка опроса' }
+            : b
+        ));
+      }
+    }, INTERVAL);
+  };
+
+  const handleGenerateBanners = async () => {
+    setBannersStarted(true);
+    setBanners(prev => prev.map(b => ({ ...b, taskId: null, loading: true, imageUrl: null, error: null })));
+
+    const archetype = (selectedArchetype || analyzeResult?.primaryArchetype || '').toLowerCase();
+    const prompt = [
+      brief.product,
+      brief.utp      && `УТП: ${brief.utp}`,
+      brief.audience && `Аудитория: ${brief.audience}`,
+      brief.goal     && `Цель: ${brief.goal}`,
+    ].filter(Boolean).join('. ');
+
+    await Promise.allSettled(
+      BANNER_FORMATS.map(async (fmt) => {
+        try {
+          const res = await fetch('/api/generate-banner', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt, width: fmt.width, height: fmt.height, style: 'bold', archetype }),
+          });
+
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: 'Ошибка' }));
+            throw new Error(err.error || `HTTP ${res.status}`);
+          }
+
+          const data = await res.json();
+          const taskId = data.taskId;
+          if (!taskId) throw new Error('No taskId returned');
+
+          setBanners(prev => prev.map(b => b.key === fmt.key ? { ...b, taskId } : b));
+          pollBanner(fmt.key, taskId);
+        } catch (err) {
+          setBanners(prev => prev.map(b =>
+            b.key === fmt.key
+              ? { ...b, loading: false, error: err instanceof Error ? err.message : 'Ошибка запуска' }
+              : b
+          ));
+        }
+      })
+    );
+  };
+
+  const handleDownload = (banner: BannerItem) => {
+    if (!banner.imageUrl) return;
+    const a = document.createElement('a');
+    a.href = banner.imageUrl;
+    a.download = `banner-${banner.key}-${Date.now()}.png`;
+    a.click();
+  };
+
+  const activeArchetype = selectedArchetype || analyzeResult?.primaryArchetype || null;
+  const hypotheses: NewHypothesis[] = analyzeResult?.newHypotheses ?? [];
+  const anyBannerLoading = banners.some(b => b.loading);
+
+  // ─── Render ───────────────────────────────────────────────────────────────
+
+  return (
+    <div className="max-w-5xl mx-auto space-y-6">
+
+      {/* ── Step progress ── */}
+      <div className="flex items-center">
+        {STEP_LABELS.map((label, i) => {
+          const n = (i + 1) as 1 | 2 | 3 | 4;
+          const isActive = step === n;
+          const isDone   = step > n;
+          return (
+            <div key={n} className="flex items-center" style={{ flex: i < STEP_LABELS.length - 1 ? '1' : undefined }}>
+              <button
+                onClick={() => isDone && goTo(n)}
+                className="flex items-center gap-2 shrink-0"
+                style={{ cursor: isDone ? 'pointer' : 'default' }}
+              >
+                <div
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all"
+                  style={{
+                    background: isActive || isDone ? ACCENT : 'rgba(255,255,255,0.08)',
+                    color:      isActive || isDone ? '#0A0A0A' : 'rgba(255,255,255,0.3)',
+                  }}
+                >
+                  {isDone ? '✓' : n}
+                </div>
+                <span
+                  className="text-sm font-medium transition-colors"
+                  style={{
+                    color: isActive ? ACCENT : isDone ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.25)',
+                  }}
+                >
+                  {label}
+                </span>
+              </button>
+              {i < STEP_LABELS.length - 1 && (
+                <div
+                  className="flex-1 h-px mx-3 transition-colors"
+                  style={{ background: isDone ? ACCENT_BORDER : 'rgba(255,255,255,0.08)' }}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ══════════════════ STEP 1: BRIEF ══════════════════ */}
+      {step === 1 && (
+        <div className="glass-card p-8">
+          <h2 className="text-white font-semibold text-xl mb-7">Бриф проекта</h2>
+
+          <div className="space-y-5">
+            {/* Row: product + price */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div>
+                <label className="block text-white/50 text-xs font-medium mb-1.5">Продукт / бренд *</label>
+                <input
+                  type="text"
+                  value={brief.product}
+                  onChange={e => setBrief(p => ({ ...p, product: e.target.value }))}
+                  placeholder="Что продаёте?"
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="block text-white/50 text-xs font-medium mb-1.5">Цена / ценовой сегмент</label>
+                <input
+                  type="text"
+                  value={brief.price}
+                  onChange={e => setBrief(p => ({ ...p, price: e.target.value }))}
+                  placeholder="990 ₽ / от 5 000 ₽ / премиум"
+                  className="input-field"
+                />
+              </div>
+            </div>
+
+            {/* Audience */}
+            <div>
+              <label className="block text-white/50 text-xs font-medium mb-1.5">Аудитория *</label>
+              <textarea
+                rows={2}
+                value={brief.audience}
+                onChange={e => setBrief(p => ({ ...p, audience: e.target.value }))}
+                placeholder="Кто ваш клиент? Возраст, интересы, боли, запросы..."
+                className="input-field resize-none"
+              />
+            </div>
+
+            {/* Row: goal + utp */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div>
+                <label className="block text-white/50 text-xs font-medium mb-1.5">Цель рекламы</label>
+                <input
+                  type="text"
+                  value={brief.goal}
+                  onChange={e => setBrief(p => ({ ...p, goal: e.target.value }))}
+                  placeholder="Продажи, лиды, узнаваемость..."
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="block text-white/50 text-xs font-medium mb-1.5">УТП</label>
+                <input
+                  type="text"
+                  value={brief.utp}
+                  onChange={e => setBrief(p => ({ ...p, utp: e.target.value }))}
+                  placeholder="В чём уникальность предложения?"
+                  className="input-field"
+                />
+              </div>
+            </div>
+
+            {/* Platforms chips */}
+            <div>
+              <label className="block text-white/50 text-xs font-medium mb-2">Платформы</label>
+              <div className="flex flex-wrap gap-2">
+                {PLATFORMS.map(p => {
+                  const active = brief.platforms.includes(p);
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => togglePlatform(p)}
+                      className="px-4 py-1.5 rounded-full text-sm font-medium transition-all"
+                      style={{
+                        background: active ? ACCENT : 'rgba(255,255,255,0.06)',
+                        color:      active ? '#0A0A0A' : 'rgba(255,255,255,0.55)',
+                        border:     `1px solid ${active ? ACCENT : 'rgba(255,255,255,0.1)'}`,
+                      }}
+                    >
+                      {p}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Context */}
+            <div>
+              <label className="block text-white/50 text-xs font-medium mb-1.5">Контекст / дополнительно</label>
+              <textarea
+                rows={3}
+                value={brief.context}
+                onChange={e => setBrief(p => ({ ...p, context: e.target.value }))}
+                placeholder="Сезонность, конкуренты, тон голоса, особые пожелания..."
+                className="input-field resize-none"
+              />
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <button
+                disabled={!brief.product.trim() || !brief.audience.trim()}
+                onClick={() => goTo(2)}
+                className="btn-primary px-8"
+              >
+                Далее →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════ STEP 2: ARCHETYPE ══════════════════ */}
+      {step === 2 && (
+        <div className="space-y-5">
+
+          {/* AI analyze panel */}
+          <div className="glass-card p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+              <div>
+                <h2 className="text-white font-semibold text-lg">Подбор архетипа</h2>
+                <p className="text-white/35 text-sm mt-0.5">AI проанализирует бриф и порекомендует архетип + гипотезы</p>
+              </div>
+              <button
+                onClick={handleAnalyze}
+                disabled={analyzeLoading}
+                className="btn-primary flex items-center gap-2 shrink-0"
+              >
+                {analyzeLoading ? <><Spinner />Анализируем...</> : '✦ Подобрать архетип'}
+              </button>
+            </div>
+
+            {analyzeError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
+                {analyzeError}
+              </div>
+            )}
+
+            {analyzeResult && (
+              <div
+                className="rounded-xl p-4 flex flex-col sm:flex-row sm:items-start gap-4"
+                style={{ background: ACCENT_BG, border: `1px solid ${ACCENT_BORDER}` }}
+              >
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span style={{ color: ACCENT }}>✦</span>
+                    <span className="text-xs uppercase tracking-wide" style={{ color: 'rgba(255,255,255,0.45)' }}>AI рекомендует</span>
+                    <span className="font-bold text-sm" style={{ color: ACCENT }}>{analyzeResult.primaryArchetype}</span>
+                  </div>
+                  <p className="text-white/55 text-sm leading-relaxed">{analyzeResult.positioning}</p>
+                </div>
+                <div className="flex flex-wrap gap-2 shrink-0">
+                  {analyzeResult.archetypes.slice(0, 3).map(a => (
+                    <div key={a.name} className="text-center">
+                      <div className="text-xs font-semibold" style={{ color: ACCENT }}>{a.matchScore}%</div>
+                      <div className="text-[10px] text-white/40">{a.name}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 26 archetypes grid */}
+          <div className="glass-card p-6">
+            <p className="text-white/40 text-xs uppercase tracking-widest mb-4">Выберите архетип вручную</p>
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+              {ARCHETYPES.map(a => {
+                const isSelected = selectedArchetype === a.id;
+                const isAiPick   = analyzeResult?.primaryArchetype === a.id;
+                return (
+                  <button
+                    key={a.id}
+                    onClick={() => setSelectedArchetype(a.id)}
+                    className="relative p-2.5 rounded-xl text-left transition-all"
+                    style={{
+                      background: isSelected ? ACCENT_BG : 'rgba(255,255,255,0.04)',
+                      border:     `1px solid ${isSelected ? ACCENT : 'rgba(255,255,255,0.07)'}`,
+                    }}
+                  >
+                    {isAiPick && (
+                      <span
+                        className="absolute -top-1.5 -right-1.5 text-[8px] font-bold px-1 py-0.5 rounded-full leading-none"
+                        style={{ background: ACCENT, color: '#0A0A0A' }}
+                      >
+                        AI
+                      </span>
+                    )}
+                    <div className="text-base mb-1">{a.icon}</div>
+                    <div
+                      className="text-[11px] font-semibold leading-tight"
+                      style={{ color: isSelected ? ACCENT : 'rgba(255,255,255,0.8)' }}
+                    >
+                      {a.label}
+                    </div>
+                    <div className="text-[9px] mt-0.5 leading-tight" style={{ color: 'rgba(255,255,255,0.28)' }}>
+                      {a.categories}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex justify-between">
+            <button onClick={() => goTo(1)} className="btn-secondary">← Назад</button>
+            <button
+              onClick={() => goTo(3)}
+              disabled={!analyzeResult && !selectedArchetype}
+              className="btn-primary"
+            >
+              Далее →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════ STEP 3: HYPOTHESES ══════════════════ */}
+      {step === 3 && (
+        <div className="space-y-5">
+          <div>
+            <h2 className="text-white font-semibold text-xl">Маркетинговые гипотезы</h2>
+            {activeArchetype && (
+              <p className="text-white/35 text-sm mt-1">
+                Архетип:&nbsp;
+                <span className="font-semibold" style={{ color: ACCENT }}>{activeArchetype}</span>
+              </p>
+            )}
+          </div>
+
+          {hypotheses.length === 0 ? (
+            <div className="glass-card p-10 text-center">
+              <div className="text-3xl mb-3">🔮</div>
+              <p className="text-white/40 text-sm mb-4">
+                Нажмите «Подобрать архетип» на шаге 2, чтобы AI сгенерировал гипотезы
+              </p>
+              <button onClick={() => goTo(2)} className="btn-secondary text-sm px-5 py-2">
+                ← К шагу 2
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+              {hypotheses.slice(0, 3).map((h, i) => (
+                <div key={i} className="glass-card p-5 flex flex-col gap-4">
+                  {/* Number badge */}
+                  <div
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
+                    style={{ background: ACCENT, color: '#0A0A0A' }}
+                  >
+                    {i + 1}
+                  </div>
+
+                  <div>
+                    <SectionLabel>Идея</SectionLabel>
+                    <p className="text-white text-sm font-medium leading-snug">{h.idea}</p>
+                  </div>
+
+                  <div>
+                    <SectionLabel>Визуал</SectionLabel>
+                    <p className="text-white/60 text-sm leading-snug">{h.visual}</p>
+                  </div>
+
+                  <div>
+                    <SectionLabel>Заголовок</SectionLabel>
+                    <p className="text-white text-sm font-semibold leading-snug">{h.headline}</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 mt-auto">
+                    <div>
+                      <SectionLabel>CTA</SectionLabel>
+                      <p className="text-sm font-bold" style={{ color: ACCENT }}>{h.cta}</p>
+                    </div>
+                    <div>
+                      <SectionLabel>Хук</SectionLabel>
+                      <p className="text-white/55 text-[12px] italic leading-snug">{h.hook}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex justify-between">
+            <button onClick={() => goTo(2)} className="btn-secondary">← Назад</button>
+            <button onClick={() => goTo(4)} className="btn-primary">Далее →</button>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════ STEP 4: BANNERS ══════════════════ */}
+      {step === 4 && (
+        <div className="space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-white font-semibold text-xl">Баннеры</h2>
+              <p className="text-white/35 text-sm mt-1">Feed · Stories · Banner — три формата одним запросом</p>
+            </div>
+            <button
+              onClick={handleGenerateBanners}
+              disabled={anyBannerLoading}
+              className="btn-primary flex items-center gap-2 shrink-0"
+            >
+              {anyBannerLoading
+                ? <><Spinner />Генерируем...</>
+                : '⚡ Сгенерировать баннеры'}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {banners.map(banner => (
+              <div key={banner.key} className="glass-card p-4 flex flex-col gap-3">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                  <span className="text-white font-semibold text-sm">{banner.label}</span>
+                  <span
+                    className="text-[10px] font-medium px-2 py-0.5 rounded-full"
+                    style={{ background: ACCENT_BG, color: ACCENT }}
+                  >
+                    {banner.sublabel}
+                  </span>
+                </div>
+
+                {/* Image area */}
+                <div
+                  className="rounded-xl overflow-hidden flex items-center justify-center"
+                  style={{
+                    background:  'rgba(255,255,255,0.03)',
+                    border:      '1px solid rgba(255,255,255,0.07)',
+                    aspectRatio: `${banner.width} / ${banner.height}`,
+                    minHeight:   100,
+                  }}
+                >
+                  {banner.loading && (
+                    <div className="flex flex-col items-center gap-2 p-4">
+                      <div
+                        className="w-8 h-8 rounded-full border-2 animate-spin"
+                        style={{ borderColor: ACCENT, borderTopColor: 'transparent' }}
+                      />
+                      <span className="text-white/30 text-xs">Генерируется... (1-2 минуты)</span>
+                    </div>
+                  )}
+                  {!banner.loading && !banner.imageUrl && !banner.error && (
+                    <div className="text-center p-4">
+                      <div className="text-2xl mb-2 opacity-30">🖼</div>
+                      <p className="text-white/20 text-xs">
+                        {bannersStarted ? 'Ожидание...' : 'Нажмите «Сгенерировать»'}
+                      </p>
+                    </div>
+                  )}
+                  {banner.error && (
+                    <p className="text-red-400 text-xs text-center p-3 leading-relaxed">{banner.error}</p>
+                  )}
+                  {banner.imageUrl && (
+                    <Image
+                      src={banner.imageUrl}
+                      alt={`${banner.label} banner`}
+                      width={banner.width}
+                      height={banner.height}
+                      className="w-full h-auto object-contain"
+                      unoptimized
+                    />
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleDownload(banner)}
+                    disabled={!banner.imageUrl}
+                    className="flex-1 py-2 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-1.5"
+                    style={
+                      banner.imageUrl
+                        ? { background: ACCENT, color: '#0A0A0A' }
+                        : { background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.2)', cursor: 'not-allowed' }
+                    }
+                  >
+                    ↓ Скачать
+                  </button>
+                  {banner.imageUrl && (
+                    <a
+                      href={banner.imageUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="py-2 px-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center"
+                      style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)' }}
+                    >
+                      ↗
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-start">
+            <button onClick={() => goTo(3)} className="btn-secondary">← Назад</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
