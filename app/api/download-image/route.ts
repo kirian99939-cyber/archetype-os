@@ -6,6 +6,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Missing url' }, { status: 400 });
   }
 
+  const ALLOWED_DOMAINS = ['file.aiquickdraw.com', 'nanobananaapi.ai', 'cdn.nanobananaapi.ai'];
+
+  try {
+    const parsedUrl = new URL(url);
+    if (!ALLOWED_DOMAINS.some(d => parsedUrl.hostname.endsWith(d))) {
+      return NextResponse.json({ error: 'Domain not allowed' }, { status: 403 });
+    }
+  } catch {
+    return NextResponse.json({ error: 'Invalid URL' }, { status: 400 });
+  }
+
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
