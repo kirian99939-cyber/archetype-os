@@ -100,6 +100,7 @@ export default function NewProject() {
   const [selectedHypotheses, setSelectedHypotheses] = useState<Set<number>>(new Set());
   const [bannerGroups, setBannerGroups]             = useState<BannerGroup[]>([]);
   const [activeBannerTab, setActiveBannerTab]       = useState(0);
+  const [isSwitchingTab, setIsSwitchingTab]         = useState(false);
   const [showNoCreditsModal, setShowNoCreditsModal] = useState(false);
 
   // ── Helpers ──
@@ -121,6 +122,15 @@ export default function NewProject() {
     });
 
   const goTo = (n: 1 | 2 | 3 | 4) => setStep(n);
+
+  const switchTab = (gi: number) => {
+    if (gi === activeBannerTab) return;
+    setIsSwitchingTab(true);
+    setTimeout(() => {
+      setActiveBannerTab(gi);
+      setIsSwitchingTab(false);
+    }, 200);
+  };
 
   // ── Step 1: offer generation ──
 
@@ -324,6 +334,7 @@ export default function NewProject() {
     }));
     setBannerGroups(initialGroups);
     setActiveBannerTab(0);
+    setIsSwitchingTab(false);
 
     const basePrompt = [
       brief.product,
@@ -894,7 +905,7 @@ export default function NewProject() {
                 return (
                   <button
                     key={gi}
-                    onClick={() => setActiveBannerTab(gi)}
+                    onClick={() => switchTab(gi)}
                     className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all"
                     style={{
                       background: isActive ? ACCENT_BG : 'rgba(255,255,255,0.05)',
@@ -924,8 +935,29 @@ export default function NewProject() {
           )}
 
           {/* Banner cards */}
-          {activeBannerGroup ? (
+          {isSwitchingTab ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {BANNER_FORMATS.map(fmt => (
+                <div key={fmt.key} className="glass-card p-4 flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-white font-semibold text-sm">{fmt.label}</span>
+                    <span
+                      className="text-[10px] font-medium px-2 py-0.5 rounded-full"
+                      style={{ background: ACCENT_BG, color: ACCENT }}
+                    >
+                      {fmt.sublabel}
+                    </span>
+                  </div>
+                  <div
+                    className="skeleton-shimmer rounded-xl"
+                    style={{ aspectRatio: `${fmt.width} / ${fmt.height}`, minHeight: 100 }}
+                  />
+                  <div className="h-9 skeleton-shimmer rounded-xl" />
+                </div>
+              ))}
+            </div>
+          ) : activeBannerGroup ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 banner-fade-in">
               {activeBannerGroup.banners.map(banner => (
                 <div key={banner.key} className="glass-card p-4 flex flex-col gap-3">
                   {/* Header */}

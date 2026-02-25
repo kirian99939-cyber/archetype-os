@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { getCredits, spendCredit } from '@/lib/supabase';
+import { getToken } from 'next-auth/jwt';
+import { supabaseAdmin, spendCredit } from '@/lib/supabase';
 import { ARCHETYPES, type TextRules } from '@/lib/archetypes';
 
 export interface GenerateBannerRequest {
@@ -166,26 +165,50 @@ export async function POST(req: NextRequest) {
 
     // ── Проверка и списание кредитов (только для первого баннера в пакете) ──
     if (body.isFirstBanner) {
-      const session = await getServerSession(authOptions);
+      // getToken reads the JWT directly from the cookie — reliable in App Router route handlers
+      const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
 
-      if (!session?.user?.id) {
+      if (!token?.email) {
         return NextResponse.json(
           { error: 'Необходима авторизация' },
           { status: 401 }
         );
       }
 
-      const credits = await getCredits(session.user.id);
+      // Look up user in Supabase by email
+      const { data: dbUser } = await supabaseAdmin
+        .from('users')
+        .select('id, credits')
+        .eq('email', token.email)
+        .maybeSingle();
 
-      if (credits <= 0) {
-        return NextResponse.json(
-          { error: 'NO_CREDITS' },
-          { status: 403 }
-        );
+      if (!dbUser) {
+        // User missing in DB (edge case) — create them
+        const { data: newUser } = await supabaseAdmin
+          .from('users')
+          .insert({
+            email:      token.email as string,
+            name:       (token.name as string) ?? null,
+            avatar_url: (token.picture as string) ?? null,
+            credits:    3,
+          })
+          .select('id, credits')
+          .single();
+
+        if (!newUser) {
+          return NextResponse.json({ error: 'Необходима авторизация' }, { status: 401 });
+        }
+
+        await spendCredit(newUser.id);
+        console.log(`[Credits] New user ${newUser.id}. Spent 1 credit. Remaining: 2`);
+      } else {
+        if (dbUser.credits <= 0) {
+          return NextResponse.json({ error: 'NO_CREDITS' }, { status: 403 });
+        }
+
+        await spendCredit(dbUser.id);
+        console.log(`[Credits] Spent 1 credit for user ${dbUser.id}. Remaining: ${dbUser.credits - 1}`);
       }
-
-      await spendCredit(session.user.id);
-      console.log(`[Credits] Spent 1 credit for user ${session.user.id}. Remaining: ${credits - 1}`);
     }
 
     // Генерируем текст через Claude если есть textRules для архетипа
