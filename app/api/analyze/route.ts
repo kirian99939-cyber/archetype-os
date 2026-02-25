@@ -39,6 +39,7 @@ export interface AnalyzeRequest {
   action?: 'generate-offer' | 'suggest-archetype' | 'generate-hypotheses';
   // Для generate-hypotheses: выбранный архетип
   selectedArchetype?: { id: string; label: string };
+  selectedArchetypes?: { id: string; label: string; rank: number }[];
   // Legacy format (ArchetypeAnalyzer)
   productDescription?: string;
   targetAudience?: string;
@@ -78,6 +79,10 @@ export interface NewHypothesis {
   headline: string;
   cta: string;
   hook: string;
+  archetypeId: string;
+  archetypeLabel: string;
+  rank: number;
+  priority: 'gold' | 'green' | 'yellow' | 'default';
 }
 
 export interface AnalyzeResponse {
@@ -221,19 +226,19 @@ ${lines.join('\n')}
 
     // ── generate-hypotheses: 5 гипотез строго под выбранный архетип ──────
     if (body.action === 'generate-hypotheses') {
-      if (!body.selectedArchetype?.id) {
+      // Поддержка нового формата (массив) и старого (один архетип)
+      let archetypesToProcess: { id: string; label: string; rank: number }[] = [];
+
+      if (body.selectedArchetypes && body.selectedArchetypes.length > 0) {
+        archetypesToProcess = body.selectedArchetypes;
+      } else if (body.selectedArchetype?.id) {
+        archetypesToProcess = [{ id: body.selectedArchetype.id, label: body.selectedArchetype.label, rank: 1 }];
+      } else {
         return NextResponse.json(
-          { error: 'selectedArchetype is required' },
+          { error: 'selectedArchetypes is required' },
           { status: 400 }
         );
       }
-
-      const archDef = ARCHETYPES.find(a => a.id === body.selectedArchetype!.id);
-      const archLabel = archDef?.label ?? body.selectedArchetype.label;
-      const archFormula = archDef?.formula ?? '';
-      const archTags = archDef?.tags?.join(', ') ?? '';
-      const archAudience = archDef?.audience ?? '';
-      const archStyle = archDef?.textRules?.style ?? 'bold';
 
       const briefLines: string[] = [];
       if (body.product)           briefLines.push(`Продукт: ${body.product}`);
@@ -245,49 +250,78 @@ ${lines.join('\n')}
       if (body.platforms?.length) briefLines.push(`Платформы: ${body.platforms.join(', ')}`);
       if (body.context)           briefLines.push(`Контекст: ${body.context}`);
 
-      const hypoMsg = await client.messages.create({
-        model: 'claude-opus-4-6',
-        max_tokens: 2000,
-        system: `Ты — эксперт по рекламным коммуникациям и маркетинговым баннерам.
+      const allHypotheses: NewHypothesis[] = [];
 
-ВЫБРАННЫЙ АРХЕТИП: ${archLabel} (id: ${body.selectedArchetype.id})
-ФОРМУЛА АРХЕТИПА: ${archFormula}
-ГОЛОС И СТИЛЬ: ${archStyle}
-ТЕГИ АРХЕТИПА: ${archTags}
-ТИПИЧНАЯ АУДИТОРИЯ АРХЕТИПА: ${archAudience}
+      for (const arch of archetypesToProcess) {
+        const archDef = ARCHETYPES.find(a => a.id === arch.id);
+        const archLabel = archDef?.label ?? arch.label;
+        const archFormula = archDef?.formula ?? '';
+        const archTags = archDef?.tags?.join(', ') ?? '';
+        const archAudience = archDef?.audience ?? '';
+        const archStyle = archDef?.textRules?.style ?? 'bold';
 
-ЗАДАЧА: Сгенерировать РОВНО 5 уникальных маркетинговых гипотез для рекламных баннеров.
+        const priority: 'gold' | 'green' | 'yellow' | 'default' =
+          arch.rank === 1 ? 'gold' : arch.rank === 2 ? 'green' : arch.rank === 3 ? 'yellow' : 'default';
 
-ЖЁСТКИЕ ТРЕБОВАНИЯ — каждая из 5 гипотез ОБЯЗАНА:
-1. Явно воплощать стиль, логику и ценности архетипа "${archLabel}"
-2. Визуально соответствовать формуле архетипа: "${archFormula}"
-3. Использовать голос и тон "${archStyle}"
-4. Упоминать или использовать паттерны архетипа: ${archTags}
-5. Быть уникальной — каждая под разным углом, но в рамках ОДНОГО архетипа
+        const hypoMsg = await client.messages.create({
+          model: 'claude-opus-4-6',
+          max_tokens: 1200,
+          system: `Ты — эксперт по рекламным коммуникациям и маркетинговым баннерам.
+
+АРХЕТИП: ${archLabel} (id: ${arch.id})
+ФОРМУЛА: ${archFormula}
+СТИЛЬ: ${archStyle}
+ТЕГИ: ${archTags}
+АУДИТОРИЯ АРХЕТИПА: ${archAudience}
+
+Сгенерируй РОВНО 2 уникальные маркетинговые гипотезы для рекламных баннеров.
+Каждая гипотеза ОБЯЗАНА воплощать стиль и логику архетипа "${archLabel}".
+Первая гипотеза — самая сильная, вторая — альтернативный подход.
 
 Верни ТОЛЬКО валидный JSON без markdown:
 {
   "newHypotheses": [
     {
-      "idea": "Идея кампании — явно отражает архетип ${archLabel}",
-      "visual": "Визуал строго по формуле: ${archFormula}",
-      "headline": "Заголовок в стиле ${archStyle}",
+      "idea": "Идея кампании",
+      "visual": "Описание визуала",
+      "headline": "Заголовок",
       "cta": "Призыв к действию",
-      "hook": "Первая фраза-крючок"
+      "hook": "Фраза-крючок"
     }
   ]
 }`,
-        messages: [{
-          role: 'user',
-          content: `Бриф продукта:\n${briefLines.join('\n')}\n\nСгенерируй 5 гипотез строго под архетип "${archLabel}".`,
-        }],
-      });
+          messages: [{
+            role: 'user',
+            content: `Бриф:\n${briefLines.join('\n')}\n\nСгенерируй 2 гипотезы строго под архетип "${archLabel}".`,
+          }],
+        });
 
-      const hypoContent = hypoMsg.content[0];
-      if (hypoContent.type !== 'text') throw new Error('Unexpected Claude response');
-      const hypoResult = extractJSON(hypoContent.text) as Record<string, unknown>;
-      if (!Array.isArray(hypoResult.newHypotheses)) hypoResult.newHypotheses = [];
-      return NextResponse.json({ newHypotheses: hypoResult.newHypotheses });
+        const hypoContent = hypoMsg.content[0];
+        if (hypoContent.type !== 'text') continue;
+
+        try {
+          const hypoResult = extractJSON(hypoContent.text) as Record<string, unknown>;
+          const rawHypotheses = Array.isArray(hypoResult.newHypotheses) ? hypoResult.newHypotheses : [];
+
+          rawHypotheses.slice(0, 2).forEach((h: any) => {
+            allHypotheses.push({
+              idea: h.idea || '',
+              visual: h.visual || '',
+              headline: h.headline || '',
+              cta: h.cta || '',
+              hook: h.hook || '',
+              archetypeId: arch.id,
+              archetypeLabel: archLabel,
+              rank: arch.rank,
+              priority,
+            });
+          });
+        } catch {
+          // Skip failed archetype, continue with others
+        }
+      }
+
+      return NextResponse.json({ newHypotheses: allHypotheses });
     }
 
     // ── main analyze action ────────────────────────────────────────────────
