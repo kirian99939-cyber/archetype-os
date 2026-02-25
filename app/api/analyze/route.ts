@@ -6,6 +6,35 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+function extractJSON(text: string): Record<string, unknown> {
+  // Strip markdown code fences if present
+  let cleaned = text.replace(/```(?:json)?\s*/gi, '').replace(/```\s*/g, '');
+
+  // Try direct parse first
+  try {
+    return JSON.parse(cleaned.trim());
+  } catch {}
+
+  // Find the outermost JSON object by matching braces
+  let depth = 0;
+  let start = -1;
+  for (let i = 0; i < cleaned.length; i++) {
+    if (cleaned[i] === '{') {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (cleaned[i] === '}') {
+      depth--;
+      if (depth === 0 && start !== -1) {
+        try {
+          return JSON.parse(cleaned.slice(start, i + 1));
+        } catch {}
+      }
+    }
+  }
+
+  throw new SyntaxError('No valid JSON found in AI response');
+}
+
 export interface AnalyzeRequest {
   action?: 'generate-offer' | 'suggest-archetype' | 'generate-hypotheses';
   // Для generate-hypotheses: выбранный архетип
@@ -144,9 +173,7 @@ ${lines.join('\n')}
 
       const offerContent = offerMsg.content[0];
       if (offerContent.type !== 'text') throw new Error('Unexpected Claude response');
-      const offerJsonMatch = offerContent.text.match(/\{[\s\S]*\}/);
-      if (!offerJsonMatch) throw new Error('No JSON in Claude response');
-      return NextResponse.json(JSON.parse(offerJsonMatch[0]) as OfferResponse);
+      return NextResponse.json(extractJSON(offerContent.text) as unknown as OfferResponse);
     }
 
     // ── suggest-archetype: только определение архетипа, без гипотез ──────
@@ -189,9 +216,7 @@ ${lines.join('\n')}
 
       const suggestContent = suggestMsg.content[0];
       if (suggestContent.type !== 'text') throw new Error('Unexpected Claude response');
-      const suggestMatch = suggestContent.text.match(/\{[\s\S]*\}/);
-      if (!suggestMatch) throw new Error('No JSON in Claude response');
-      return NextResponse.json(JSON.parse(suggestMatch[0]) as AnalyzeResponse);
+      return NextResponse.json(extractJSON(suggestContent.text) as unknown as AnalyzeResponse);
     }
 
     // ── generate-hypotheses: 5 гипотез строго под выбранный архетип ──────
@@ -260,9 +285,7 @@ ${lines.join('\n')}
 
       const hypoContent = hypoMsg.content[0];
       if (hypoContent.type !== 'text') throw new Error('Unexpected Claude response');
-      const hypoMatch = hypoContent.text.match(/\{[\s\S]*\}/);
-      if (!hypoMatch) throw new Error('No JSON in Claude response');
-      const hypoResult = JSON.parse(hypoMatch[0]);
+      const hypoResult = extractJSON(hypoContent.text) as Record<string, unknown>;
       if (!Array.isArray(hypoResult.newHypotheses)) hypoResult.newHypotheses = [];
       return NextResponse.json({ newHypotheses: hypoResult.newHypotheses });
     }
@@ -301,12 +324,7 @@ ${lines.join('\n')}
       throw new Error('Unexpected response type from Claude');
     }
 
-    const jsonMatch = content.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('No valid JSON found in Claude response');
-    }
-
-    const result: AnalyzeResponse = JSON.parse(jsonMatch[0]);
+    const result: AnalyzeResponse = extractJSON(content.text) as unknown as AnalyzeResponse;
 
     if (!result.newHypotheses) result.newHypotheses = [];
 
