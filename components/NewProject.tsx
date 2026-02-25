@@ -19,6 +19,23 @@ const BANNER_FORMATS = [
 
 const STEP_LABELS = ['Бриф', 'Архетип', 'Гипотезы', 'Баннеры'];
 
+const LOADING_PHRASES = [
+  'Анализируем психотип аудитории...',
+  'Подбираем визуальную стратегию...',
+  'Настраиваем композицию и цвет...',
+  'Генерируем уникальный креатив...',
+  'Прокачиваем CTR на +37%...',
+  'Добавляем щепотку нейромагии...',
+  'Уговариваем нейросеть постараться...',
+  'Дизайнер бы делал это 4 часа...',
+  'Проверяем, чтобы было огненно...',
+  'Настраиваем эмоциональные крючки...',
+  'Подключаем архетип к визуалу...',
+  'Ещё чуть-чуть, почти шедевр...',
+  'Полируем пиксели до блеска...',
+  'Заряжаем баннер на конверсию...',
+];
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type VisualMode = 'ai' | 'upload' | 'link';
@@ -115,6 +132,7 @@ export default function NewProject() {
   const [activeBannerTab, setActiveBannerTab]       = useState(0);
   const [isSwitchingTab, setIsSwitchingTab]         = useState(false);
   const [showNoCreditsModal, setShowNoCreditsModal] = useState(false);
+  const [loadingPhrase, setLoadingPhrase] = useState(0);
 
   // ── Project persistence ──
   const [projectId, setProjectIdState]             = useState<string | null>(null);
@@ -429,6 +447,14 @@ export default function NewProject() {
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bannerGroups]);
+
+  useEffect(() => {
+    if (!anyBannerLoading) return;
+    const interval = setInterval(() => {
+      setLoadingPhrase(prev => (prev + 1) % LOADING_PHRASES.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [anyBannerLoading]);
 
   // ── Step 4: banners ──
 
@@ -1342,7 +1368,12 @@ export default function NewProject() {
                           className="w-8 h-8 rounded-full border-2 animate-spin"
                           style={{ borderColor: ACCENT, borderTopColor: 'transparent' }}
                         />
-                        <span className="text-white/30 text-xs">Генерируется... (1-2 минуты)</span>
+                        <span
+                          className="text-white/40 text-xs text-center transition-opacity duration-500"
+                          key={loadingPhrase}
+                        >
+                          {LOADING_PHRASES[loadingPhrase]}
+                        </span>
                       </div>
                     )}
                     {!banner.loading && !banner.imageUrl && !banner.error && (
