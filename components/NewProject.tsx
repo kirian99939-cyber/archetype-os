@@ -953,43 +953,25 @@ export default function NewProject() {
             <div className="flex justify-end items-center gap-3 pt-1">
               {/* DEBUG: временная кнопка — удалить после отладки */}
               <button
-                type="button"
-                onClick={() => {
-                  const id    = session?.user?.id;
-                  const email = session?.user?.email;
-                  const credits = (session?.user as { credits?: number })?.credits;
-                  alert(`Session debug:\nid: ${id ?? '❌ undefined'}\nemail: ${email ?? '—'}\ncredits: ${credits ?? '—'}`);
-                }}
-                className="text-xs px-3 py-2 rounded-xl"
-                style={{ background: 'rgba(255,255,0,0.08)', border: '1px solid rgba(255,255,0,0.2)', color: 'rgba(255,255,0,0.7)' }}
-              >
-                🔍 Сессия
-              </button>
-
-              <button
                 disabled={!brief.product.trim() || !brief.audience.trim()}
                 onClick={async () => {
-                  console.log('[Step1→2] session.user:', session?.user);
-                  console.log('[Step1→2] brief:', brief);
                   goTo(2);
                   const title = brief.product.trim() || 'Без названия';
                   if (projectIdRef.current) {
                     patchProject({ brief: brief as unknown as Record<string, unknown>, title, status: 'brief' });
                   } else {
                     try {
-                      console.log('[Step1→2] calling POST /api/projects...');
                       const res = await fetch('/api/projects', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ title, brief: brief as unknown as Record<string, unknown>, status: 'brief' }),
                       });
                       const json = await res.json();
-                      console.log(`[Step1→2] POST /api/projects → ${res.status}`, json);
                       if (res.ok) {
                         setProject(json.id);
                         localStorage.setItem(LS_KEY, JSON.stringify({ id: json.id, title }));
                       }
-                    } catch (err) {
-                      console.error('[Step1→2] fetch error:', err);
+                    } catch {
+                      // silent
                     }
                   }
                 }}
