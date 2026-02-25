@@ -52,7 +52,7 @@ export default function BannerLibraryPage() {
     });
   });
 
-  const archetypeIds = [...new Set(allBanners.map(b => b.archetypeId).filter(Boolean))];
+  const archetypeIds = Array.from(new Set(allBanners.map(b => b.archetypeId).filter(Boolean)));
   const filtered = filter === 'all' ? allBanners : allBanners.filter(b => b.archetypeId === filter);
 
   const handleDownload = (banner: any) => {
