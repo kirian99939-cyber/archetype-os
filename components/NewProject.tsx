@@ -8,7 +8,17 @@ import { ARCHETYPES } from '@/lib/archetypes';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const PLATFORMS = ['Instagram', 'TikTok', 'VK', 'Telegram', 'YouTube'];
+const PLATFORMS = [
+  'Instagram',
+  'TikTok',
+  'VK',
+  'Telegram',
+  'YouTube',
+  'Яндекс Директ',
+  'Google Ads',
+  'MyTarget',
+  'Одноклассники',
+];
 
 
 const BANNER_FORMATS = [
