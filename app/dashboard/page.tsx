@@ -165,7 +165,7 @@ export default function DashboardRoute() {
           {activePage === 'new-project' && <NewProject />}
           {activePage === 'analytics'   && <AnalyticsPage />}
           {activePage === 'settings'    && <SettingsPage />}
-          {activePage === 'history'     && <HistoryPage />}
+          {activePage === 'history'     && <HistoryPage onNavigate={(p) => setActivePage(p as Page)} />}
         </main>
       </div>
     </div>

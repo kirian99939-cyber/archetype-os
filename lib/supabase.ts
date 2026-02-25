@@ -108,11 +108,11 @@ export async function saveProject(
   return row.id;
 }
 
-/** Возвращает все проекты пользователя (без JSONB-полей), отсортированные по updated_at. */
+/** Возвращает все проекты пользователя, отсортированные по updated_at. */
 export async function getProjects(userId: string) {
   const { data, error } = await supabaseAdmin
     .from('projects')
-    .select('id, title, status, created_at, updated_at')
+    .select('id, title, status, created_at, updated_at, archetype, banners')
     .eq('user_id', userId)
     .order('updated_at', { ascending: false });
 
