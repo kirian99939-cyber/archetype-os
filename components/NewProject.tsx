@@ -12,9 +12,48 @@ const PLATFORMS = ['Instagram', 'TikTok', 'VK', 'Telegram', 'YouTube'];
 
 
 const BANNER_FORMATS = [
-  { key: 'feed',    label: 'Feed',    sublabel: '1:1',  width: 1080, height: 1080 },
-  { key: 'stories', label: 'Stories', sublabel: '9:16', width: 1080, height: 1920 },
-  { key: 'banner',  label: 'Banner',  sublabel: '16:9', width: 1280, height: 720  },
+  // Соцсети
+  { key: 'feed',         label: 'Лента квадрат',      sublabel: '1080×1080',  width: 1080, height: 1080, group: 'social' },
+  { key: 'feed_vertical',label: 'Лента вертикальный',  sublabel: '1080×1350',  width: 1080, height: 1350, group: 'social' },
+  { key: 'stories',      label: 'Stories / Клипы',     sublabel: '1080×1920',  width: 1080, height: 1920, group: 'social' },
+  // Видео и сайты
+  { key: 'banner',       label: 'Горизонтальный',      sublabel: '1920×1080',  width: 1920, height: 1080, group: 'media' },
+  { key: 'post_wide',    label: 'Пост широкий',        sublabel: '1080×607',   width: 1080, height: 607,  group: 'media' },
+  // Рекламные сети
+  { key: 'rsya_vertical', label: 'РСЯ баннер',         sublabel: '240×400',    width: 240,  height: 400,  group: 'adnetwork' },
+];
+
+const AD_PLATFORMS = [
+  {
+    key: 'vk',
+    label: 'VK Реклама',
+    icon: '📱',
+    formats: ['feed', 'feed_vertical', 'stories', 'post_wide'],
+  },
+  {
+    key: 'yandex',
+    label: 'Яндекс Директ',
+    icon: '🔍',
+    formats: ['feed', 'post_wide', 'rsya_vertical'],
+  },
+  {
+    key: 'telegram',
+    label: 'Telegram Ads',
+    icon: '✈️',
+    formats: ['banner', 'post_wide'],
+  },
+  {
+    key: 'mytarget',
+    label: 'MyTarget (ОК)',
+    icon: '🎯',
+    formats: ['feed', 'post_wide', 'rsya_vertical'],
+  },
+  {
+    key: 'google',
+    label: 'Google Ads',
+    icon: '🌐',
+    formats: ['feed', 'feed_vertical', 'banner'],
+  },
 ];
 
 const STEP_LABELS = ['Бриф', 'Архетип', 'Гипотезы', 'Баннеры'];
@@ -136,6 +175,29 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
   const [showingHistory, setShowingHistory] = useState(false);
   const [historyTab, setHistoryTab] = useState(0);
   const [loadingPhrase, setLoadingPhrase] = useState(0);
+  const [selectedFormats, setSelectedFormats] = useState<Set<string>>(
+    new Set(BANNER_FORMATS.map(f => f.key))
+  );
+
+  const toggleFormat = (key: string) => {
+    setSelectedFormats(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        if (next.size <= 1) return prev;
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const selectByPlatform = (platformKey: string) => {
+    const platform = AD_PLATFORMS.find(p => p.key === platformKey);
+    if (platform) {
+      setSelectedFormats(new Set(platform.formats));
+    }
+  };
 
   // ── Project persistence ──
   const [projectId, setProjectIdState]             = useState<string | null>(null);
@@ -571,7 +633,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
     const initialGroups: BannerGroup[] = selectedList.map(idx => ({
       hypothesisIndex: idx,
       hypothesisTitle: hypotheses[idx]?.idea || `Гипотеза ${idx + 1}`,
-      banners: BANNER_FORMATS.map(f => ({ ...f, taskId: null, imageUrl: null, loading: true, error: null })),
+      banners: BANNER_FORMATS.filter(f => selectedFormats.has(f.key)).map(f => ({ ...f, taskId: null, imageUrl: null, loading: true, error: null })),
     }));
     setBannerGroups(initialGroups);
     setActiveBannerTab(0);
@@ -591,8 +653,9 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
           ? `${basePrompt}. Гипотеза: ${hypothesis.idea}. Визуал: ${hypothesis.visual}.`
           : basePrompt;
 
+        const activeFormats = BANNER_FORMATS.filter(f => selectedFormats.has(f.key));
         await Promise.allSettled(
-          BANNER_FORMATS.map(async (fmt, fmtIndex) => {
+          activeFormats.map(async (fmt, fmtIndex) => {
             // Первый баннер пакета: первый формат первой гипотезы
             const isFirstBanner = groupIndex === 0 && fmtIndex === 0;
             // Resolve product image URLs from the brief visual selection
@@ -1360,7 +1423,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
             <div>
               <h2 className="text-white font-semibold text-xl">Баннеры</h2>
               <p className="text-white/35 text-sm mt-1">
-                {selectedHypotheses.size} {selectedHypotheses.size === 1 ? 'гипотеза' : 'гипотезы'} · Feed · Stories · Banner
+                {selectedHypotheses.size} {selectedHypotheses.size === 1 ? 'гипотеза' : 'гипотезы'} · {BANNER_FORMATS.filter(f => selectedFormats.has(f.key)).map(f => f.label).join(' · ')}
               </p>
             </div>
             <button
@@ -1372,6 +1435,74 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
                 ? <><Spinner />Генерируем...</>
                 : '⚡ Сгенерировать баннеры'}
             </button>
+          </div>
+
+          {/* Быстрый выбор по площадке */}
+          <div className="glass-card p-5 space-y-4">
+            <p className="text-white/40 text-xs uppercase tracking-widest">Площадка</p>
+            <div className="flex flex-wrap gap-2">
+              {AD_PLATFORMS.map(platform => {
+                const allSelected = platform.formats.every(f => selectedFormats.has(f));
+                return (
+                  <button
+                    key={platform.key}
+                    type="button"
+                    onClick={() => selectByPlatform(platform.key)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all"
+                    style={{
+                      background: allSelected ? ACCENT_BG : 'rgba(255,255,255,0.03)',
+                      border: `1px solid ${allSelected ? ACCENT : 'rgba(255,255,255,0.08)'}`,
+                      color: allSelected ? ACCENT : 'rgba(255,255,255,0.5)',
+                    }}
+                  >
+                    <span>{platform.icon}</span>
+                    {platform.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Форматы */}
+            <p className="text-white/40 text-xs uppercase tracking-widest mt-4">Форматы для генерации</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {BANNER_FORMATS.map(fmt => {
+                const isSelected = selectedFormats.has(fmt.key);
+                const fmtPlatforms = AD_PLATFORMS.filter(p => p.formats.includes(fmt.key));
+                return (
+                  <button
+                    key={fmt.key}
+                    type="button"
+                    onClick={() => toggleFormat(fmt.key)}
+                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all text-left"
+                    style={{
+                      background: isSelected ? ACCENT_BG : 'rgba(255,255,255,0.03)',
+                      border: `1px solid ${isSelected ? ACCENT : 'rgba(255,255,255,0.08)'}`,
+                    }}
+                  >
+                    <div
+                      className="w-4 h-4 rounded flex items-center justify-center border-2 shrink-0"
+                      style={
+                        isSelected
+                          ? { background: ACCENT, borderColor: ACCENT }
+                          : { background: 'transparent', borderColor: 'rgba(255,255,255,0.25)' }
+                      }
+                    >
+                      {isSelected && (
+                        <span style={{ color: '#0A0A0A', fontSize: 9, fontWeight: 'bold', lineHeight: 1 }}>✓</span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-xs font-semibold block" style={{ color: isSelected ? ACCENT : 'rgba(255,255,255,0.7)' }}>
+                        {fmt.label}
+                      </span>
+                      <span className="text-[10px] block" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                        {fmt.sublabel} · {fmtPlatforms.map(p => p.icon).join(' ')}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Tabs */}
