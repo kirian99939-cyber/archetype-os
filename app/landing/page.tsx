@@ -297,7 +297,7 @@ export default function LandingPage() {
           </div>
 
           <p className="text-xs" style={{ color: 'rgba(255,255,255,0.28)' }}>
-            © 2024 Архетип-Протокол
+            © {new Date().getFullYear()} Архетип-Протокол
           </p>
         </div>
       </footer>
