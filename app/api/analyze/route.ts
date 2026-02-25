@@ -145,6 +145,17 @@ export async function POST(req: NextRequest) {
 
     const body: AnalyzeRequest = await req.json();
 
+    // Лимиты на входные данные
+    const MAX_LEN: Record<string, number> = {
+      product: 300, price: 100, audience: 600, goal: 300,
+      utp: 500, offer: 500, context: 1000,
+    };
+    for (const [key, max] of Object.entries(MAX_LEN)) {
+      if (typeof (body as any)[key] === 'string' && (body as any)[key].length > max) {
+        (body as any)[key] = (body as any)[key].slice(0, max);
+      }
+    }
+
     const productDesc = body.product || body.productDescription;
     const audience    = body.audience || body.targetAudience;
 
