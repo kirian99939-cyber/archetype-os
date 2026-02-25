@@ -97,7 +97,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function NewProject() {
+export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boolean) => void }) {
   const { data: session } = useSession();
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
@@ -640,6 +640,20 @@ export default function NewProject() {
       setLoadingPhrase(prev => (prev + 1) % LOADING_PHRASES.length);
     }, 3000);
     return () => clearInterval(interval);
+  }, [anyBannerLoading]);
+
+  useEffect(() => {
+    onBusyChange?.(anyBannerLoading);
+  }, [anyBannerLoading, onBusyChange]);
+
+  useEffect(() => {
+    if (!anyBannerLoading) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
   }, [anyBannerLoading]);
 
   // ─── Render ───────────────────────────────────────────────────────────────
