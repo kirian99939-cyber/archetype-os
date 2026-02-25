@@ -53,3 +53,21 @@ export async function PATCH(
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
+
+/** DELETE /api/projects/[id] — удалить проект */
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  const userId = await resolveUserId(req);
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { error } = await supabaseAdmin
+    .from('projects')
+    .delete()
+    .eq('id', params.id)
+    .eq('user_id', userId);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}

@@ -92,6 +92,31 @@ export default function HistoryPage({ onNavigate }: HistoryPageProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!deleteId) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/projects/${deleteId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+      setProjects(prev => prev.filter(p => p.id !== deleteId));
+      // Очищаем localStorage если удалённый проект был черновиком
+      try {
+        const raw = localStorage.getItem('archetype_draft_project');
+        if (raw) {
+          const meta = JSON.parse(raw);
+          if (meta.id === deleteId) localStorage.removeItem('archetype_draft_project');
+        }
+      } catch {}
+    } catch {
+      // silent
+    } finally {
+      setDeleting(false);
+      setDeleteId(null);
+    }
+  };
 
   const fetchProjects = useCallback(async () => {
     setLoading(true);
@@ -264,12 +289,12 @@ export default function HistoryPage({ onNavigate }: HistoryPageProps) {
                   </p>
                 )}
 
-                {/* Action */}
-                <div className="mt-auto pt-1">
+                {/* Actions */}
+                <div className="mt-auto pt-1 flex gap-2">
                   {isCompleted ? (
                     <button
                       onClick={() => handleContinue(project)}
-                      className="w-full py-2 rounded-xl text-sm font-medium transition-all"
+                      className="flex-1 py-2 rounded-xl text-sm font-medium transition-all"
                       style={{
                         background: 'rgba(255,255,255,0.06)',
                         border: '1px solid rgba(255,255,255,0.1)',
@@ -281,17 +306,76 @@ export default function HistoryPage({ onNavigate }: HistoryPageProps) {
                   ) : (
                     <button
                       onClick={() => handleContinue(project)}
-                      className="btn-primary w-full text-sm"
+                      className="btn-primary flex-1 text-sm"
                     >
                       Продолжить →
                     </button>
                   )}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setDeleteId(project.id); }}
+                    className="py-2 px-3 rounded-xl text-sm transition-all"
+                    style={{
+                      background: 'rgba(255,80,80,0.08)',
+                      border: '1px solid rgba(255,80,80,0.15)',
+                      color: 'rgba(255,100,100,0.6)',
+                    }}
+                    title="Удалить проект"
+                  >
+                    🗑
+                  </button>
                 </div>
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* ══════════ MODAL: DELETE CONFIRM ══════════ */}
+      {deleteId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
+          onClick={() => !deleting && setDeleteId(null)}
+        >
+          <div
+            className="glass-card p-8 max-w-sm w-full text-center"
+            style={{ border: '1px solid rgba(255,80,80,0.25)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div
+              className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-5"
+              style={{ background: 'rgba(255,80,80,0.1)', border: '1px solid rgba(255,80,80,0.2)' }}
+            >
+              <span style={{ fontSize: '1.5rem' }}>🗑</span>
+            </div>
+            <h3 className="text-white font-bold text-lg mb-2">Удалить проект?</h3>
+            <p className="text-white/50 text-sm leading-relaxed mb-6">
+              Проект и все баннеры будут удалены безвозвратно.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="py-2.5 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2"
+                style={{
+                  background: 'rgba(255,80,80,0.15)',
+                  border: '1px solid rgba(255,80,80,0.3)',
+                  color: 'rgba(255,100,100,0.9)',
+                }}
+              >
+                {deleting ? 'Удаляем...' : 'Да, удалить'}
+              </button>
+              <button
+                onClick={() => setDeleteId(null)}
+                disabled={deleting}
+                className="btn-secondary text-sm"
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
