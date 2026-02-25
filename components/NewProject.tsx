@@ -132,6 +132,9 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
   const [activeBannerTab, setActiveBannerTab]       = useState(0);
   const [isSwitchingTab, setIsSwitchingTab]         = useState(false);
   const [showNoCreditsModal, setShowNoCreditsModal] = useState(false);
+  const [bannerHistory, setBannerHistory] = useState<any[]>([]);
+  const [showingHistory, setShowingHistory] = useState(false);
+  const [historyTab, setHistoryTab] = useState(0);
   const [loadingPhrase, setLoadingPhrase] = useState(0);
 
   // ── Project persistence ──
@@ -287,6 +290,10 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
           banners: g.banners.map(b => ({ ...b, loading: false, error: b.error ?? null })),
         }));
         setBannerGroups(restored);
+      }
+
+      if (Array.isArray(project.banner_history) && project.banner_history.length > 0) {
+        setBannerHistory(project.banner_history);
       }
 
       setProject(resumeMeta.id);
@@ -1520,6 +1527,82 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
             <div className="glass-card p-10 text-center">
               <div className="text-3xl mb-3">⚡</div>
               <p className="text-white/40 text-sm">Нажмите «Сгенерировать баннеры» чтобы начать</p>
+            </div>
+          )}
+
+          {bannerGroups.length > 0 && !anyBannerLoading && (
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => {
+                  const archDef = selectedArchetypes.length > 0 ? ARCHETYPES.find(a => a.id === selectedArchetypes[0].id) : null;
+                  setBannerHistory(prev => [...prev, {
+                    iterationId: `iter_${Date.now()}`,
+                    createdAt: new Date().toISOString(),
+                    archetypeId: selectedArchetypes[0]?.id || null,
+                    archetypeLabel: archDef?.label || selectedArchetypes[0]?.id || null,
+                    bannerGroups: bannerGroups.map(g => ({
+                      hypothesisIndex: g.hypothesisIndex,
+                      hypothesisTitle: g.hypothesisTitle,
+                      banners: g.banners.map(b => ({
+                        key: b.key, label: b.label, sublabel: b.sublabel,
+                        imageUrl: b.imageUrl, error: b.error,
+                      })),
+                    })),
+                  }]);
+                  setBannerGroups([]);
+                  setSelectedHypotheses(new Set());
+                  setHypotheses([]);
+                  lastHypothesesArchetype.current = null;
+                  goTo(2);
+                }}
+                className="btn-secondary flex items-center gap-2"
+              >
+                🔄 Новая итерация
+              </button>
+              {bannerHistory.length > 0 && (
+                <button
+                  onClick={() => setShowingHistory(!showingHistory)}
+                  className="btn-outline flex items-center gap-2"
+                >
+                  📚 Библиотека ({bannerHistory.length})
+                </button>
+              )}
+            </div>
+          )}
+
+          {showingHistory && bannerHistory.length > 0 && (
+            <div className="glass-card p-6 space-y-4">
+              <h3 className="text-white font-semibold text-lg">📚 Библиотека баннеров</h3>
+              <div className="flex gap-2 flex-wrap">
+                {bannerHistory.map((iter: any, i: number) => (
+                  <button key={iter.iterationId} onClick={() => setHistoryTab(i)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                    style={{
+                      background: historyTab === i ? 'rgba(200,255,0,0.1)' : 'rgba(255,255,255,0.05)',
+                      border: `1px solid ${historyTab === i ? '#C8FF00' : 'rgba(255,255,255,0.1)'}`,
+                      color: historyTab === i ? '#C8FF00' : 'rgba(255,255,255,0.5)',
+                    }}>
+                    #{i + 1} · {iter.archetypeLabel || 'Без архетипа'} · {new Date(iter.createdAt).toLocaleDateString('ru-RU')}
+                  </button>
+                ))}
+              </div>
+              {bannerHistory[historyTab]?.bannerGroups?.map((group: any, gi: number) => (
+                <div key={gi} className="space-y-3">
+                  <p className="text-white/40 text-xs">Гипотеза {group.hypothesisIndex + 1}: {group.hypothesisTitle}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {group.banners?.map((b: any) => (
+                      <div key={b.key} className="glass-card p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-white text-xs font-semibold">{b.label}</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(200,255,0,0.1)', color: '#C8FF00' }}>{b.sublabel}</span>
+                        </div>
+                        {b.imageUrl ? <img src={b.imageUrl} alt={b.label} className="w-full rounded-lg" /> : <div className="bg-white/5 rounded-lg p-4 text-center text-white/20 text-xs">{b.error || 'Нет изображения'}</div>}
+                        {b.imageUrl && <button onClick={() => handleDownload(b)} className="w-full mt-2 py-1.5 rounded-lg text-xs font-semibold" style={{ background: '#C8FF00', color: '#0A0A0A' }}>↓ Скачать</button>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 

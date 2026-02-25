@@ -42,7 +42,29 @@ export async function PATCH(
   const userId = await resolveUserId(req);
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const body: ProjectPayload = await req.json();
+  const body: ProjectPayload & { banner_history?: any[] } = await req.json();
+
+  if (body.status === 'completed' && body.banners) {
+    const { data: current } = await supabaseAdmin
+      .from('projects')
+      .select('banner_history, archetype')
+      .eq('id', params.id)
+      .single();
+
+    const history = Array.isArray(current?.banner_history) ? current.banner_history : [];
+    const archetype = body.archetype || current?.archetype;
+
+    const newIteration = {
+      iterationId: `iter_${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      archetypeId: archetype?.id || null,
+      archetypeLabel: archetype?.label || archetype?.id || null,
+      bannerGroups: body.banners,
+    };
+
+    history.push(newIteration);
+    body.banner_history = history;
+  }
 
   const { error } = await supabaseAdmin
     .from('projects')

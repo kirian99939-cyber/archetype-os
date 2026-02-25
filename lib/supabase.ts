@@ -112,7 +112,7 @@ export async function saveProject(
 export async function getProjects(userId: string) {
   const { data, error } = await supabaseAdmin
     .from('projects')
-    .select('id, title, status, created_at, updated_at, archetype, banners')
+    .select('id, title, status, created_at, updated_at, archetype, banners, banner_history')
     .eq('user_id', userId)
     .order('updated_at', { ascending: false });
 
