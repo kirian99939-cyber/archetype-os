@@ -1,152 +1,273 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSession, signOut } from 'next-auth/react';
 
 const ACCENT = '#C8FF00';
-const STORAGE_KEY = 'google_api_key';
+const ACCENT_BG = 'rgba(200,255,0,0.1)';
+const ACCENT_BORDER = 'rgba(200,255,0,0.2)';
+
+const LS_DEFAULTS_KEY = 'archetype_brief_defaults';
+
+const PLATFORM_OPTIONS = ['Instagram', 'TikTok', 'VK', 'Facebook', 'YouTube', 'Pinterest', 'Google Display'];
+const VISUAL_MODES = [
+  { value: 'ai', label: '🤖 Сгенерировать AI', desc: 'Нейросеть создаст визуал с нуля' },
+  { value: 'photo', label: '📸 Загрузить фото', desc: 'Использовать своё фото продукта' },
+  { value: 'link', label: '🔗 Вставить ссылку', desc: 'Указать URL готового изображения' },
+];
+
+interface BriefDefaults {
+  company: string;
+  audience: string;
+  platforms: string[];
+  visualMode: string;
+}
+
+const EMPTY_DEFAULTS: BriefDefaults = {
+  company: '',
+  audience: '',
+  platforms: [],
+  visualMode: '',
+};
 
 export default function SettingsPage() {
-  const [apiKey, setApiKey] = useState('');
-  const [saved, setSaved] = useState('');
-  const [showKey, setShowKey] = useState(false);
-  const [justSaved, setJustSaved] = useState(false);
+  const { data: session } = useSession();
+  const user = session?.user as any;
 
+  const [defaults, setDefaults] = useState<BriefDefaults>(EMPTY_DEFAULTS);
+  const [saved, setSaved] = useState(false);
+
+  // Загрузка дефолтов из localStorage
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) ?? '';
-    setApiKey(stored);
-    setSaved(stored);
+    try {
+      const raw = localStorage.getItem(LS_DEFAULTS_KEY);
+      if (raw) setDefaults(JSON.parse(raw));
+    } catch {}
   }, []);
 
   const handleSave = () => {
-    const trimmed = apiKey.trim();
-    localStorage.setItem(STORAGE_KEY, trimmed);
-    setSaved(trimmed);
-    setJustSaved(true);
-    setTimeout(() => setJustSaved(false), 2000);
+    localStorage.setItem(LS_DEFAULTS_KEY, JSON.stringify(defaults));
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
   };
 
-  const handleClear = () => {
-    localStorage.removeItem(STORAGE_KEY);
-    setApiKey('');
-    setSaved('');
+  const handleReset = () => {
+    setDefaults(EMPTY_DEFAULTS);
+    localStorage.removeItem(LS_DEFAULTS_KEY);
+    setSaved(false);
   };
 
-  const isConnected = saved.length > 0;
-  const isDirty = apiKey.trim() !== saved;
+  const togglePlatform = (p: string) => {
+    setDefaults((prev) => ({
+      ...prev,
+      platforms: prev.platforms.includes(p)
+        ? prev.platforms.filter((x) => x !== p)
+        : [...prev.platforms, p],
+    }));
+  };
 
   return (
-    <div className="max-w-xl">
-      <div className="mb-6">
-        <h2 className="text-white font-bold text-xl mb-1">Настройки</h2>
-        <p className="text-white/40 text-sm">Управление API-ключами и подключениями</p>
-      </div>
+    <div className="flex flex-col gap-8 max-w-2xl">
 
-      {/* Status card */}
-      <div
-        className="rounded-xl p-4 border mb-6 flex items-center gap-3"
-        style={{
-          background: isConnected ? 'rgba(200,255,0,0.05)' : 'rgba(255,255,255,0.03)',
-          borderColor: isConnected ? 'rgba(200,255,0,0.25)' : 'rgba(255,255,255,0.1)',
-        }}
-      >
+      {/* ──────────── ПРОФИЛЬ ──────────── */}
+      <section>
+        <p className="text-xs font-medium text-white/30 uppercase tracking-widest mb-4">Профиль</p>
         <div
-          className="w-2.5 h-2.5 rounded-full shrink-0"
-          style={{
-            background: isConnected ? ACCENT : 'rgba(255,255,255,0.2)',
-            boxShadow: isConnected ? `0 0 8px ${ACCENT}` : 'none',
-          }}
-        />
-        <div>
-          <p className="text-sm font-medium" style={{ color: isConnected ? ACCENT : 'rgba(255,255,255,0.4)' }}>
-            {isConnected ? 'Google API подключён' : 'Google API не подключён'}
-          </p>
-          {isConnected && (
-            <p className="text-xs text-white/30 mt-0.5">
-              Ключ: {saved.slice(0, 8)}••••{saved.slice(-4)}
-            </p>
-          )}
-        </div>
-      </div>
+          className="rounded-xl border border-white/10 p-6"
+          style={{ background: 'rgba(255,255,255,0.03)' }}
+        >
+          <div className="flex items-center gap-4 mb-5">
+            {user?.image ? (
+              <img
+                src={user.image}
+                alt="avatar"
+                className="w-12 h-12 rounded-full object-cover"
+              />
+            ) : (
+              <div
+                className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold"
+                style={{ background: ACCENT_BG, color: ACCENT }}
+              >
+                {user?.name?.[0] || '?'}
+              </div>
+            )}
+            <div>
+              <p className="text-white font-medium">{user?.name || 'Пользователь'}</p>
+              <p className="text-white/40 text-sm">{user?.email || ''}</p>
+            </div>
+          </div>
 
-      {/* API Key field */}
-      <div
-        className="rounded-xl p-5 border border-white/10"
-        style={{ background: 'rgba(255,255,255,0.03)' }}
-      >
-        <label className="block text-sm font-medium text-white mb-1">
-          Google API Key
-        </label>
-        <p className="text-xs text-white/30 mb-3">
-          Используется для генерации баннеров через Gemini. Сохраняется в localStorage вашего браузера.
+          {/* Кредиты */}
+          <div
+            className="rounded-lg p-4 flex items-center justify-between"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+          >
+            <div>
+              <p className="text-white/50 text-xs mb-1">Баланс кредитов</p>
+              <p className="text-2xl font-bold" style={{ color: ACCENT }}>
+                {user?.credits ?? '—'}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-white/30 text-xs leading-relaxed">
+                1 кредит = 1 пакет баннеров<br />
+                (все форматы за раз)
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ──────────── ДЕФОЛТЫ БРИФА ──────────── */}
+      <section>
+        <p className="text-xs font-medium text-white/30 uppercase tracking-widest mb-1">Шаблон брифа</p>
+        <p className="text-white/20 text-xs mb-4">
+          Эти значения будут автоматически подставляться при создании нового проекта
         </p>
 
-        <div className="relative mb-4">
-          <input
-            type={showKey ? 'text' : 'password'}
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="AIza..."
-            className="w-full rounded-lg px-3 py-2.5 pr-10 text-sm outline-none transition-all"
-            style={{
-              background: 'rgba(255,255,255,0.05)',
-              border: '1px solid rgba(255,255,255,0.12)',
-              color: '#fff',
-            }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(200,255,0,0.4)';
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
-            }}
-          />
-          <button
-            onClick={() => setShowKey((v) => !v)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors text-xs"
-          >
-            {showKey ? '🙈' : '👁'}
-          </button>
-        </div>
-
-        <div className="flex gap-2">
-          <button
-            onClick={handleSave}
-            disabled={!isDirty && !justSaved}
-            className="flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all"
-            style={{
-              background: justSaved ? 'rgba(200,255,0,0.2)' : ACCENT,
-              color: justSaved ? ACCENT : '#000',
-              opacity: (!isDirty && !justSaved) ? 0.4 : 1,
-              cursor: (!isDirty && !justSaved) ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {justSaved ? '✓ Сохранено' : 'Сохранить'}
-          </button>
-
-          {isConnected && (
-            <button
-              onClick={handleClear}
-              className="px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
+        <div
+          className="rounded-xl border border-white/10 p-6 flex flex-col gap-5"
+          style={{ background: 'rgba(255,255,255,0.03)' }}
+        >
+          {/* Компания */}
+          <div>
+            <label className="text-white/50 text-xs mb-1.5 block">Название компании / бренда</label>
+            <input
+              type="text"
+              value={defaults.company}
+              onChange={(e) => setDefaults({ ...defaults, company: e.target.value })}
+              placeholder="Например: FitFlow"
+              className="w-full rounded-lg px-4 py-3 text-sm text-white outline-none transition-colors"
               style={{
-                background: 'rgba(255,255,255,0.05)',
-                color: 'rgba(255,100,100,0.7)',
-                border: '1px solid rgba(255,100,100,0.2)',
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.1)',
+              }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = ACCENT_BORDER; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; }}
+            />
+          </div>
+
+          {/* Аудитория */}
+          <div>
+            <label className="text-white/50 text-xs mb-1.5 block">Целевая аудитория по умолчанию</label>
+            <input
+              type="text"
+              value={defaults.audience}
+              onChange={(e) => setDefaults({ ...defaults, audience: e.target.value })}
+              placeholder="Например: Женщины 25–40, интересуются фитнесом"
+              className="w-full rounded-lg px-4 py-3 text-sm text-white outline-none transition-colors"
+              style={{
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.1)',
+              }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = ACCENT_BORDER; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; }}
+            />
+          </div>
+
+          {/* Платформы */}
+          <div>
+            <label className="text-white/50 text-xs mb-2 block">Предпочитаемые платформы</label>
+            <div className="flex flex-wrap gap-2">
+              {PLATFORM_OPTIONS.map((p) => {
+                const active = defaults.platforms.includes(p);
+                return (
+                  <button
+                    key={p}
+                    onClick={() => togglePlatform(p)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                    style={{
+                      background: active ? ACCENT_BG : 'rgba(255,255,255,0.05)',
+                      border: `1px solid ${active ? ACCENT_BORDER : 'rgba(255,255,255,0.08)'}`,
+                      color: active ? ACCENT : 'rgba(255,255,255,0.4)',
+                    }}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Визуальный режим */}
+          <div>
+            <label className="text-white/50 text-xs mb-2 block">Визуал по умолчанию</label>
+            <div className="flex flex-col gap-2">
+              {VISUAL_MODES.map((m) => {
+                const active = defaults.visualMode === m.value;
+                return (
+                  <button
+                    key={m.value}
+                    onClick={() => setDefaults({ ...defaults, visualMode: active ? '' : m.value })}
+                    className="flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all"
+                    style={{
+                      background: active ? ACCENT_BG : 'rgba(255,255,255,0.04)',
+                      border: `1px solid ${active ? ACCENT_BORDER : 'rgba(255,255,255,0.08)'}`,
+                    }}
+                  >
+                    <span className="text-sm">{m.label}</span>
+                    <span className="text-white/25 text-xs ml-auto">{m.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Кнопки */}
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              onClick={handleSave}
+              className="px-5 py-2.5 rounded-lg text-sm font-medium transition-all"
+              style={{
+                background: ACCENT,
+                color: '#0A0A0A',
               }}
             >
-              Удалить
+              {saved ? '✓ Сохранено' : 'Сохранить'}
             </button>
-          )}
+            <button
+              onClick={handleReset}
+              className="px-5 py-2.5 rounded-lg text-sm font-medium transition-all"
+              style={{
+                background: 'rgba(255,255,255,0.06)',
+                color: 'rgba(255,255,255,0.4)',
+                border: '1px solid rgba(255,255,255,0.08)',
+              }}
+            >
+              Сбросить
+            </button>
+          </div>
         </div>
-      </div>
+      </section>
 
-      {/* Info block */}
-      <div
-        className="rounded-xl p-4 border border-white/10 mt-4 text-xs text-white/30 leading-relaxed"
-        style={{ background: 'rgba(255,255,255,0.02)' }}
-      >
-        <p className="font-medium text-white/50 mb-1">Где получить ключ?</p>
-        <p>Перейдите в Google AI Studio → Get API Key. Ключ начинается с «AIza».</p>
-        <p className="mt-1">Ключ хранится только в вашем браузере и никуда не отправляется.</p>
-      </div>
+      {/* ──────────── ВЫХОД ──────────── */}
+      <section>
+        <div
+          className="rounded-xl border border-white/10 p-6 flex items-center justify-between"
+          style={{ background: 'rgba(255,255,255,0.03)' }}
+        >
+          <div>
+            <p className="text-white text-sm font-medium">Выйти из аккаунта</p>
+            <p className="text-white/30 text-xs mt-0.5">Вы сможете войти снова через Google</p>
+          </div>
+          <button
+            onClick={() => signOut({ callbackUrl: '/landing' })}
+            className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+            style={{
+              background: 'rgba(255,80,80,0.1)',
+              color: 'rgba(255,100,100,0.9)',
+              border: '1px solid rgba(255,80,80,0.2)',
+            }}
+          >
+            Выйти
+          </button>
+        </div>
+      </section>
+
+      {/* Версия */}
+      <p className="text-white/15 text-xs text-center pb-4">
+        Архетип-Протокол v1.0 · Powered by Claude & NanoBanana
+      </p>
     </div>
   );
 }
