@@ -114,7 +114,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
   const [photoError,     setPhotoError]     = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
-  const [selectedArchetype, setSelectedArchetype] = useState<string | null>(null);
+  const [selectedArchetypes, setSelectedArchetypes] = useState<{ id: string; rank: number }[]>([]);
   // analyzeResult используется только для отображения AI-рекомендации архетипа на шаге 2
   const [analyzeResult, setAnalyzeResult]         = useState<AnalyzeResponse | null>(null);
   const [analyzeLoading, setAnalyzeLoading]       = useState(false);
@@ -149,6 +149,29 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
         ? prev.platforms.filter(x => x !== p)
         : [...prev.platforms, p],
     }));
+
+  const MAX_ARCHETYPES = 5;
+
+  const toggleArchetype = (id: string) => {
+    setSelectedArchetypes(prev => {
+      const exists = prev.find(a => a.id === id);
+      if (exists) return prev.filter(a => a.id !== id);
+      if (prev.length >= MAX_ARCHETYPES) return prev;
+      return [...prev, { id, rank: prev.length + 1 }];
+    });
+  };
+
+  const getArchetypeRank = (id: string) => selectedArchetypes.find(a => a.id === id)?.rank ?? null;
+
+  const RANK_STYLES: Record<number, { icon: string; color: string; bg: string; border: string; label: string }> = {
+    1: { icon: '🏆', color: '#FFD700', bg: 'rgba(255,215,0,0.12)', border: 'rgba(255,215,0,0.35)', label: 'Основной' },
+    2: { icon: '🟢', color: '#4ade80', bg: 'rgba(74,222,128,0.10)', border: 'rgba(74,222,128,0.30)', label: 'Сильный' },
+    3: { icon: '🟡', color: '#facc15', bg: 'rgba(250,204,21,0.10)', border: 'rgba(250,204,21,0.30)', label: 'Хороший' },
+  };
+
+  const DEFAULT_RANK_STYLE = { icon: '◈', color: 'rgba(255,255,255,0.5)', bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.15)', label: 'Дополнительный' };
+
+  const getRankStyle = (rank: number) => RANK_STYLES[rank] ?? DEFAULT_RANK_STYLE;
 
   const toggleHypothesis = (idx: number) =>
     setSelectedHypotheses(prev => {
@@ -244,7 +267,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
       const project = await res.json();
 
       if (project.brief)      setBrief(prev => ({ ...prev, ...project.brief }));
-      if (project.archetype?.id) setSelectedArchetype(project.archetype.id);
+      if (project.archetype?.id) setSelectedArchetypes([{ id: project.archetype.id, rank: 1 }]);
 
       if (Array.isArray(project.hypotheses) && project.hypotheses.length > 0) {
         setHypotheses(project.hypotheses);
@@ -341,8 +364,12 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
       const data: AnalyzeResponse = await res.json();
       setAnalyzeResult(data);
       // Автовыбираем рекомендованный архетип если ещё не выбран
-      if (data.primaryArchetype && !selectedArchetype) {
-        setSelectedArchetype(data.primaryArchetype);
+      if (data.archetypes && selectedArchetypes.length === 0) {
+        const top3 = data.archetypes.slice(0, 3).map((a: any, i: number) => ({
+          id: a.name,
+          rank: i + 1,
+        }));
+        setSelectedArchetypes(top3);
       }
       // Гипотезы НЕ генерируются здесь
     } catch (err) {
@@ -354,20 +381,21 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
 
   // ── Step 3: генерация гипотез строго под выбранный архетип ──
 
-  const handleGenerateHypotheses = async (archetypeId: string) => {
-    const archetypeDef = ARCHETYPES.find(a => a.id === archetypeId);
+  const handleGenerateHypotheses = async (archetypes: { id: string; rank: number }[]) => {
     setHypothesesLoading(true);
     setHypothesesError(null);
     try {
+      const selectedArchetypesPayload = archetypes.map(a => {
+        const def = ARCHETYPES.find(d => d.id === a.id);
+        return { id: a.id, label: def?.label ?? a.id, rank: a.rank };
+      });
+
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'generate-hypotheses',
-          selectedArchetype: {
-            id:    archetypeId,
-            label: archetypeDef?.label ?? archetypeId,
-          },
+          selectedArchetypes: selectedArchetypesPayload,
           product:   brief.product,
           price:     brief.price,
           audience:  brief.audience,
@@ -383,11 +411,10 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
         throw new Error(err.error || `HTTP ${res.status}`);
       }
       const data = await res.json();
-      const generated: NewHypothesis[] = data.newHypotheses ?? [];
+      const generated = data.newHypotheses ?? [];
       setHypotheses(generated);
-      lastHypothesesArchetype.current = archetypeId;
-      // Автовыбираем все сгенерированные гипотезы
-      setSelectedHypotheses(new Set(Array.from({ length: Math.min(generated.length, 5) }, (_, i) => i)));
+      lastHypothesesArchetype.current = archetypes.map(a => a.id).sort().join(',');
+      setSelectedHypotheses(new Set(Array.from({ length: Math.min(generated.length, 10) }, (_, i) => i)));
     } catch (err) {
       setHypothesesError(err instanceof Error ? err.message : 'Ошибка генерации гипотез');
     } finally {
@@ -395,20 +422,21 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
     }
   };
 
-  // Сбрасываем гипотезы когда меняется архетип
   useEffect(() => {
-    if (lastHypothesesArchetype.current !== null && lastHypothesesArchetype.current !== selectedArchetype) {
+    // Сбрасываем гипотезы при любом изменении выбранных архетипов
+    const currentKey = selectedArchetypes.map(a => a.id).sort().join(',');
+    if (lastHypothesesArchetype.current !== null && lastHypothesesArchetype.current !== currentKey) {
       setHypotheses([]);
       setSelectedHypotheses(new Set());
       setHypothesesError(null);
       lastHypothesesArchetype.current = null;
     }
-  }, [selectedArchetype]);
+  }, [selectedArchetypes]);
 
   // При входе на шаг 3 — генерируем гипотезы если ещё нет
   useEffect(() => {
-    if (step === 3 && selectedArchetype && hypotheses.length === 0 && !hypothesesLoading) {
-      handleGenerateHypotheses(selectedArchetype);
+    if (step === 3 && selectedArchetypes.length > 0 && hypotheses.length === 0 && !hypothesesLoading) {
+      handleGenerateHypotheses(selectedArchetypes);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
@@ -530,7 +558,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
       // сетевая ошибка — продолжаем, сервер сам проверит
     }
 
-    const archetype = (selectedArchetype || analyzeResult?.primaryArchetype || '').toLowerCase();
+    const archetype = (selectedArchetypes[0]?.id || analyzeResult?.primaryArchetype || '').toLowerCase();
     const selectedList = Array.from(selectedHypotheses).sort((a, b) => a - b);
 
     const initialGroups: BannerGroup[] = selectedList.map(idx => ({
@@ -630,7 +658,9 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
     a.click();
   };
 
-  const activeArchetype = selectedArchetype || analyzeResult?.primaryArchetype || null;
+  const activeArchetype = selectedArchetypes.length > 0
+    ? selectedArchetypes.map(a => ARCHETYPES.find(d => d.id === a.id)?.label ?? a.id).join(', ')
+    : analyzeResult?.primaryArchetype || null;
   const anyBannerLoading = bannerGroups.some(g => g.banners.some(b => b.loading));
   const activeBannerGroup = bannerGroups[activeBannerTab] ?? null;
 
@@ -1077,33 +1107,41 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
 
           {/* 26 archetypes grid */}
           <div className="glass-card p-6">
-            <p className="text-white/40 text-xs uppercase tracking-widest mb-4">Выберите архетип вручную</p>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-white/40 text-xs uppercase tracking-widest">Выберите архетипы (до {MAX_ARCHETYPES})</p>
+              {selectedArchetypes.length > 0 && (
+                <p className="text-xs" style={{ color: ACCENT }}>
+                  Выбрано: {selectedArchetypes.length}
+                </p>
+              )}
+            </div>
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
               {ARCHETYPES.map(a => {
-                const isSelected = selectedArchetype === a.id;
-                const isAiPick   = analyzeResult?.primaryArchetype === a.id;
+                const rank = getArchetypeRank(a.id);
+                const isSelected = rank !== null;
+                const isAiPick   = analyzeResult?.archetypes?.some((ar: any) => ar.name === a.id);
+                const rankStyle = rank ? getRankStyle(rank) : null;
                 return (
                   <button
                     key={a.id}
-                    onClick={() => setSelectedArchetype(a.id)}
+                    onClick={() => toggleArchetype(a.id)}
                     className="relative p-2.5 rounded-xl text-left transition-all"
                     style={{
-                      background: isSelected ? ACCENT_BG : 'rgba(255,255,255,0.04)',
-                      border:     `1px solid ${isSelected ? ACCENT : 'rgba(255,255,255,0.07)'}`,
+                      background: isSelected && rankStyle ? rankStyle.bg : 'rgba(255,255,255,0.04)',
+                      border:     `1px solid ${isSelected && rankStyle ? rankStyle.border : 'rgba(255,255,255,0.07)'}`,
                     }}
                   >
-                    {isAiPick && (
+                    {rank && (
                       <span
-                        className="absolute -top-1.5 -right-1.5 text-[8px] font-bold px-1 py-0.5 rounded-full leading-none"
-                        style={{ background: ACCENT, color: '#0A0A0A' }}
+                        className="absolute -top-1.5 -right-1.5 text-sm leading-none"
                       >
-                        AI
+                        {rankStyle!.icon}
                       </span>
                     )}
                     <div className="text-base mb-1">{a.icon}</div>
                     <div
                       className="text-[11px] font-semibold leading-tight"
-                      style={{ color: isSelected ? ACCENT : 'rgba(255,255,255,0.8)' }}
+                      style={{ color: isSelected && rankStyle ? rankStyle.color : 'rgba(255,255,255,0.8)' }}
                     >
                       {a.label}
                     </div>
@@ -1120,10 +1158,13 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
             <button onClick={() => goTo(1)} className="btn-secondary">← Назад</button>
             <button
               onClick={() => {
-                patchProject({ archetype: { id: selectedArchetype }, status: 'archetype' });
+                patchProject({
+                  archetype: selectedArchetypes.length > 0 ? { id: selectedArchetypes[0].id } : null,
+                  status: 'archetype',
+                });
                 goTo(3);
               }}
-              disabled={!selectedArchetype}
+              disabled={selectedArchetypes.length === 0}
               className="btn-primary"
             >
               Далее →
@@ -1138,11 +1179,22 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <h2 className="text-white font-semibold text-xl">Маркетинговые гипотезы</h2>
-              {activeArchetype && (
-                <p className="text-white/35 text-sm mt-1">
-                  Архетип:&nbsp;
-                  <span className="font-semibold" style={{ color: ACCENT }}>{activeArchetype}</span>
-                </p>
+              {selectedArchetypes.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {selectedArchetypes.map(a => {
+                    const def = ARCHETYPES.find(d => d.id === a.id);
+                    const rs = getRankStyle(a.rank);
+                    return (
+                      <span
+                        key={a.id}
+                        className="text-xs font-medium px-2.5 py-1 rounded-full flex items-center gap-1"
+                        style={{ background: rs.bg, color: rs.color, border: `1px solid ${rs.border}` }}
+                      >
+                        {rs.icon} {def?.label ?? a.id}
+                      </span>
+                    );
+                  })}
+                </div>
               )}
             </div>
             {hypotheses.length > 0 && !hypothesesLoading && (
@@ -1161,7 +1213,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
               <p className="text-white/60 text-sm mb-1">
                 Генерируем гипотезы под архетип&nbsp;
                 <span style={{ color: ACCENT }}>
-                  {ARCHETYPES.find(a => a.id === activeArchetype)?.label ?? activeArchetype}
+                  {selectedArchetypes.map(a => ARCHETYPES.find(d => d.id === a.id)?.label ?? a.id).join(', ')}
                 </span>
               </p>
               <p className="text-white/25 text-xs">Обычно занимает 10–20 секунд</p>
@@ -1171,7 +1223,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
               <div className="text-3xl mb-3">⚠️</div>
               <p className="text-red-400 text-sm mb-4">{hypothesesError}</p>
               <button
-                onClick={() => selectedArchetype && handleGenerateHypotheses(selectedArchetype)}
+                onClick={() => selectedArchetypes.length > 0 && handleGenerateHypotheses(selectedArchetypes)}
                 className="btn-primary text-sm px-6"
               >
                 Попробовать снова
@@ -1199,11 +1251,18 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
                   >
                     {/* Header row: number badge + checkbox */}
                     <div className="flex items-center justify-between">
-                      <div
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
-                        style={{ background: isSelected ? ACCENT : 'rgba(255,255,255,0.12)', color: isSelected ? '#0A0A0A' : 'rgba(255,255,255,0.5)' }}
-                      >
-                        {i + 1}
+                      <div className="flex items-center gap-1.5">
+                        <div
+                          className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
+                          style={{ background: isSelected ? ACCENT : 'rgba(255,255,255,0.12)', color: isSelected ? '#0A0A0A' : 'rgba(255,255,255,0.5)' }}
+                        >
+                          {i + 1}
+                        </div>
+                        {(h as any).priority && (
+                          <span className="text-sm">
+                            {(h as any).priority === 'gold' ? '🏆' : (h as any).priority === 'green' ? '🟢' : (h as any).priority === 'yellow' ? '🟡' : '◈'}
+                          </span>
+                        )}
                       </div>
                       <div
                         className="w-5 h-5 rounded flex items-center justify-center border-2 transition-all shrink-0"
@@ -1218,6 +1277,21 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
                         )}
                       </div>
                     </div>
+
+                    {(h as any).archetypeLabel && (
+                      <div>
+                        <span
+                          className="text-[10px] font-medium px-2 py-0.5 rounded-full"
+                          style={{
+                            background: getRankStyle((h as any).rank ?? 99).bg,
+                            color: getRankStyle((h as any).rank ?? 99).color,
+                            border: `1px solid ${getRankStyle((h as any).rank ?? 99).border}`,
+                          }}
+                        >
+                          {getRankStyle((h as any).rank ?? 99).icon} {(h as any).archetypeLabel}
+                        </span>
+                      </div>
+                    )}
 
                     <div>
                       <SectionLabel>Идея</SectionLabel>
@@ -1256,7 +1330,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
               onClick={() => {
                 patchProject({
                   hypotheses: hypotheses,
-                  archetype:  { id: selectedArchetype },
+                  archetype:  selectedArchetypes.length > 0 ? { id: selectedArchetypes[0].id } : null,
                   status:     'hypotheses',
                 });
                 goTo(4);
