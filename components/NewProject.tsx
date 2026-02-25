@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+import { useSession } from 'next-auth/react';
 import type { AnalyzeResponse, NewHypothesis } from '@/app/api/analyze/route';
 import { ARCHETYPES } from '@/lib/archetypes';
 
@@ -80,6 +81,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function NewProject() {
+  const { data: session } = useSession();
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
   const [brief, setBrief] = useState<Brief>({
@@ -113,6 +115,12 @@ export default function NewProject() {
   const [activeBannerTab, setActiveBannerTab]       = useState(0);
   const [isSwitchingTab, setIsSwitchingTab]         = useState(false);
   const [showNoCreditsModal, setShowNoCreditsModal] = useState(false);
+
+  // ── Project persistence ──
+  const [projectId, setProjectIdState]             = useState<string | null>(null);
+  const [resumeMeta, setResumeMeta]                = useState<{ id: string; title: string } | null>(null);
+  const [resumeLoading, setResumeLoading]          = useState(false);
+  const projectIdRef                               = useRef<string | null>(null);
 
   // ── Helpers ──
 
@@ -182,6 +190,83 @@ export default function NewProject() {
       setActiveBannerTab(gi);
       setIsSwitchingTab(false);
     }, 200);
+  };
+
+  // ── Project persistence helpers ──
+
+  const LS_KEY = 'archetype_draft_project';
+
+  const setProject = (id: string | null) => {
+    projectIdRef.current = id;
+    setProjectIdState(id);
+  };
+
+  /** Fire-and-forget PATCH for an existing project */
+  const patchProject = (data: Record<string, unknown>) => {
+    const pid = projectIdRef.current;
+    if (!pid) return;
+    fetch(`/api/projects/${pid}`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(data),
+    }).catch(() => {});
+  };
+
+  /** Resume: fetch project and restore component state */
+  const handleResume = async () => {
+    if (!resumeMeta) return;
+    setResumeLoading(true);
+    try {
+      const res = await fetch(`/api/projects/${resumeMeta.id}`);
+      if (!res.ok) {
+        localStorage.removeItem(LS_KEY);
+        setResumeMeta(null);
+        return;
+      }
+      const project = await res.json();
+
+      if (project.brief)      setBrief(prev => ({ ...prev, ...project.brief }));
+      if (project.archetype?.id) setSelectedArchetype(project.archetype.id);
+
+      if (Array.isArray(project.hypotheses) && project.hypotheses.length > 0) {
+        setHypotheses(project.hypotheses);
+        setSelectedHypotheses(
+          new Set(Array.from({ length: Math.min(project.hypotheses.length, 5) }, (_, i) => i)),
+        );
+        lastHypothesesArchetype.current = project.archetype?.id ?? null;
+      }
+
+      if (Array.isArray(project.banners) && project.banners.length > 0) {
+        const restored: BannerGroup[] = project.banners.map((g: {
+          hypothesisIndex: number; hypothesisTitle: string;
+          banners: (Omit<BannerItem, 'loading'> & { loading?: boolean })[];
+        }) => ({
+          hypothesisIndex: g.hypothesisIndex,
+          hypothesisTitle: g.hypothesisTitle,
+          banners: g.banners.map(b => ({ ...b, loading: false, error: b.error ?? null })),
+        }));
+        setBannerGroups(restored);
+      }
+
+      setProject(resumeMeta.id);
+
+      // Navigate to the most advanced saved step
+      if (project.banners?.length || project.status === 'completed') goTo(4);
+      else if (project.hypotheses?.length || project.status === 'hypotheses')  goTo(4);
+      else if (project.archetype?.id || project.status === 'archetype')        goTo(3);
+      else                                                                       goTo(2);
+    } catch {
+      localStorage.removeItem(LS_KEY);
+    } finally {
+      setResumeLoading(false);
+      setResumeMeta(null);
+    }
+  };
+
+  const handleStartFresh = () => {
+    localStorage.removeItem(LS_KEY);
+    setResumeMeta(null);
+    setProject(null);
   };
 
   // ── Step 1: offer generation ──
@@ -310,6 +395,41 @@ export default function NewProject() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
+  // На маунте — проверяем localStorage на незавершённый проект
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('archetype_draft_project');
+      if (!raw) return;
+      const meta = JSON.parse(raw) as { id: string; title: string };
+      if (meta?.id) setResumeMeta(meta);
+    } catch {}
+  }, []);
+
+  // После завершения генерации всех баннеров — сохраняем в БД
+  useEffect(() => {
+    const pid = projectIdRef.current;
+    if (!pid || bannerGroups.length === 0) return;
+    const allDone = bannerGroups.every(g => g.banners.every(b => !b.loading));
+    if (!allDone) return;
+
+    fetch(`/api/projects/${pid}`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        status:  'completed',
+        banners: bannerGroups.map(g => ({
+          hypothesisIndex: g.hypothesisIndex,
+          hypothesisTitle: g.hypothesisTitle,
+          banners: g.banners.map(b => ({
+            key: b.key, label: b.label, sublabel: b.sublabel,
+            imageUrl: b.imageUrl, error: b.error,
+          })),
+        })),
+      }),
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bannerGroups]);
+
   // ── Step 4: banners ──
 
   const pollBanner = (groupIndex: number, fmtKey: string, taskId: string, attempt = 1) => {
@@ -376,6 +496,22 @@ export default function NewProject() {
   };
 
   const handleGenerateBanners = async () => {
+    // Предварительная проверка кредитов до запуска генерации
+    try {
+      const creditsRes = await fetch('/api/check-credits');
+      if (creditsRes.ok) {
+        const { credits } = await creditsRes.json();
+        if (credits <= 0) {
+          setShowNoCreditsModal(true);
+          return;
+        }
+      } else if (creditsRes.status === 401) {
+        return; // не авторизован — ничего не делаем
+      }
+    } catch {
+      // сетевая ошибка — продолжаем, сервер сам проверит
+    }
+
     const archetype = (selectedArchetype || analyzeResult?.primaryArchetype || '').toLowerCase();
     const selectedList = Array.from(selectedHypotheses).sort((a, b) => a - b);
 
@@ -687,7 +823,8 @@ export default function NewProject() {
 
             {/* Product visual */}
             <div>
-              <label className="block text-white/50 text-xs font-medium mb-2">Визуал продукта</label>
+              <label className="block text-white/50 text-xs font-medium mb-0.5">Главный визуал</label>
+              <p className="text-white/30 text-xs mb-2">Фото товара, объекта, спикера или бренда — модель встроит его в баннер</p>
 
               {/* Mode selector */}
               <div className="flex flex-wrap gap-2 mb-3">
@@ -807,16 +944,55 @@ export default function NewProject() {
                   type="url"
                   value={brief.imageLink}
                   onChange={e => setBrief(p => ({ ...p, imageLink: e.target.value }))}
-                  placeholder="https://example.com/product.jpg"
+                  placeholder="https://... (фото товара, спикера или объекта)"
                   className="input-field"
                 />
               )}
             </div>
 
-            <div className="flex justify-end pt-1">
+            <div className="flex justify-end items-center gap-3 pt-1">
+              {/* DEBUG: временная кнопка — удалить после отладки */}
+              <button
+                type="button"
+                onClick={() => {
+                  const id    = session?.user?.id;
+                  const email = session?.user?.email;
+                  const credits = (session?.user as { credits?: number })?.credits;
+                  alert(`Session debug:\nid: ${id ?? '❌ undefined'}\nemail: ${email ?? '—'}\ncredits: ${credits ?? '—'}`);
+                }}
+                className="text-xs px-3 py-2 rounded-xl"
+                style={{ background: 'rgba(255,255,0,0.08)', border: '1px solid rgba(255,255,0,0.2)', color: 'rgba(255,255,0,0.7)' }}
+              >
+                🔍 Сессия
+              </button>
+
               <button
                 disabled={!brief.product.trim() || !brief.audience.trim()}
-                onClick={() => goTo(2)}
+                onClick={async () => {
+                  console.log('[Step1→2] session.user:', session?.user);
+                  console.log('[Step1→2] brief:', brief);
+                  goTo(2);
+                  const title = brief.product.trim() || 'Без названия';
+                  if (projectIdRef.current) {
+                    patchProject({ brief: brief as unknown as Record<string, unknown>, title, status: 'brief' });
+                  } else {
+                    try {
+                      console.log('[Step1→2] calling POST /api/projects...');
+                      const res = await fetch('/api/projects', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ title, brief: brief as unknown as Record<string, unknown>, status: 'brief' }),
+                      });
+                      const json = await res.json();
+                      console.log(`[Step1→2] POST /api/projects → ${res.status}`, json);
+                      if (res.ok) {
+                        setProject(json.id);
+                        localStorage.setItem(LS_KEY, JSON.stringify({ id: json.id, title }));
+                      }
+                    } catch (err) {
+                      console.error('[Step1→2] fetch error:', err);
+                    }
+                  }
+                }}
                 className="btn-primary px-8"
               >
                 Далее →
@@ -921,7 +1097,10 @@ export default function NewProject() {
           <div className="flex justify-between">
             <button onClick={() => goTo(1)} className="btn-secondary">← Назад</button>
             <button
-              onClick={() => goTo(3)}
+              onClick={() => {
+                patchProject({ archetype: { id: selectedArchetype }, status: 'archetype' });
+                goTo(3);
+              }}
               disabled={!selectedArchetype}
               className="btn-primary"
             >
@@ -1052,7 +1231,14 @@ export default function NewProject() {
           <div className="flex justify-between">
             <button onClick={() => goTo(2)} className="btn-secondary">← Назад</button>
             <button
-              onClick={() => goTo(4)}
+              onClick={() => {
+                patchProject({
+                  hypotheses: hypotheses,
+                  archetype:  { id: selectedArchetype },
+                  status:     'hypotheses',
+                });
+                goTo(4);
+              }}
               disabled={selectedHypotheses.size === 0 || hypothesesLoading}
               className="btn-primary"
             >
@@ -1239,6 +1425,47 @@ export default function NewProject() {
           </div>
         </div>
       )}
+      {/* ══════════════════ MODAL: RESUME PROJECT ══════════════════ */}
+      {resumeMeta && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
+        >
+          <div
+            className="glass-card p-8 max-w-sm w-full text-center"
+            style={{ border: `1px solid ${ACCENT_BORDER}` }}
+          >
+            <div
+              className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-5"
+              style={{ background: 'rgba(200,255,0,0.08)', border: `1px solid ${ACCENT_BORDER}` }}
+            >
+              <span style={{ fontSize: '1.5rem' }}>📂</span>
+            </div>
+            <h3 className="text-white font-bold text-lg mb-2">Незавершённый проект</h3>
+            <p className="text-sm font-medium mb-1" style={{ color: ACCENT }}>
+              {resumeMeta.title}
+            </p>
+            <p className="text-white/35 text-xs mb-6">Продолжить с места, где остановились?</p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleResume}
+                disabled={resumeLoading}
+                className="btn-primary text-sm flex items-center justify-center gap-2"
+              >
+                {resumeLoading ? <><Spinner />Загружаем...</> : 'Продолжить'}
+              </button>
+              <button
+                onClick={handleStartFresh}
+                disabled={resumeLoading}
+                className="btn-secondary text-sm"
+              >
+                Начать заново
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ══════════════════ MODAL: NO CREDITS ══════════════════ */}
       {showNoCreditsModal && (
         <div

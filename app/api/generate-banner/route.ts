@@ -168,52 +168,48 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── Проверка и списание кредитов (только для первого баннера в пакете) ──
-    if (body.isFirstBanner) {
-      // getToken reads the JWT directly from the cookie — reliable in App Router route handlers
-      const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+    // ── Авторизация и проверка кредитов (для КАЖДОГО запроса) ──
+    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
 
-      if (!token?.email) {
-        return NextResponse.json(
-          { error: 'Необходима авторизация' },
-          { status: 401 }
-        );
-      }
+    if (!token?.email) {
+      return NextResponse.json({ error: 'Необходима авторизация' }, { status: 401 });
+    }
 
-      // Look up user in Supabase by email
-      const { data: dbUser } = await supabaseAdmin
+    // Ищем пользователя в Supabase по email
+    let { data: dbUser } = await supabaseAdmin
+      .from('users')
+      .select('id, credits')
+      .eq('email', token.email)
+      .maybeSingle();
+
+    // Edge case: пользователь есть в Auth, но нет в таблице users — создаём
+    if (!dbUser) {
+      const { data: newUser } = await supabaseAdmin
         .from('users')
+        .insert({
+          email:      token.email as string,
+          name:       (token.name as string) ?? null,
+          avatar_url: (token.picture as string) ?? null,
+          credits:    3,
+        })
         .select('id, credits')
-        .eq('email', token.email)
-        .maybeSingle();
+        .single();
 
-      if (!dbUser) {
-        // User missing in DB (edge case) — create them
-        const { data: newUser } = await supabaseAdmin
-          .from('users')
-          .insert({
-            email:      token.email as string,
-            name:       (token.name as string) ?? null,
-            avatar_url: (token.picture as string) ?? null,
-            credits:    3,
-          })
-          .select('id, credits')
-          .single();
-
-        if (!newUser) {
-          return NextResponse.json({ error: 'Необходима авторизация' }, { status: 401 });
-        }
-
-        await spendCredit(newUser.id);
-        console.log(`[Credits] New user ${newUser.id}. Spent 1 credit. Remaining: 2`);
-      } else {
-        if (dbUser.credits <= 0) {
-          return NextResponse.json({ error: 'NO_CREDITS' }, { status: 403 });
-        }
-
-        await spendCredit(dbUser.id);
-        console.log(`[Credits] Spent 1 credit for user ${dbUser.id}. Remaining: ${dbUser.credits - 1}`);
+      if (!newUser) {
+        return NextResponse.json({ error: 'Необходима авторизация' }, { status: 401 });
       }
+      dbUser = newUser;
+    }
+
+    // Проверяем баланс ПЕРЕД любым вызовом NanoBanana
+    if (dbUser.credits <= 0) {
+      return NextResponse.json({ error: 'NO_CREDITS' }, { status: 403 });
+    }
+
+    // Списываем кредит только за первый баннер в пакете
+    if (body.isFirstBanner) {
+      await spendCredit(dbUser.id);
+      console.log(`[Credits] Spent 1 credit for user ${dbUser.id}. Remaining: ${dbUser.credits - 1}`);
     }
 
     // Генерируем текст через Claude если есть textRules для архетипа
