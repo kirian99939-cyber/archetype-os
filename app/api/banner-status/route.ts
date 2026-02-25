@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
     const imageUrl = statusData.data?.response?.resultImageUrl || statusData.data?.result_urls?.[0];
     const isReady = !!imageUrl && statusData.data?.successFlag === 1;
 
-    return NextResponse.json({ ready: isReady, imageUrl, debug: statusData });
+    return NextResponse.json({ ready: isReady, imageUrl });
   } catch (error) {
     console.error('Banner status API error:', error);
     const message = error instanceof Error ? error.message : String(error);
