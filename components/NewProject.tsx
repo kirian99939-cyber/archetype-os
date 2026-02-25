@@ -26,6 +26,7 @@ interface Brief {
   audience:  string;
   goal:      string;
   utp:       string;
+  offer:     string;
   platforms: string[];
   context:   string;
 }
@@ -77,8 +78,11 @@ export default function NewProject() {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
   const [brief, setBrief] = useState<Brief>({
-    product: '', price: '', audience: '', goal: '', utp: '', platforms: [], context: '',
+    product: '', price: '', audience: '', goal: '', utp: '', offer: '', platforms: [], context: '',
   });
+
+  const [offerLoading, setOfferLoading]       = useState(false);
+  const [offerSuggestions, setOfferSuggestions] = useState<string[]>([]);
 
   const [selectedArchetype, setSelectedArchetype] = useState<string | null>(null);
   const [analyzeResult, setAnalyzeResult]         = useState<AnalyzeResponse | null>(null);
@@ -108,6 +112,33 @@ export default function NewProject() {
     });
 
   const goTo = (n: 1 | 2 | 3 | 4) => setStep(n);
+
+  // ── Step 1: offer generation ──
+
+  const handleGenerateOffer = async () => {
+    setOfferLoading(true);
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'generate-offer',
+          product: brief.product,
+          audience: brief.audience,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Ошибка' }));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      setOfferSuggestions(data.offers ?? []);
+    } catch {
+      // silently fail — field stays editable
+    } finally {
+      setOfferLoading(false);
+    }
+  };
 
   // ── Step 2: analyze ──
 
@@ -150,7 +181,7 @@ export default function NewProject() {
   // ── Step 4: banners ──
 
   const pollBanner = (groupIndex: number, fmtKey: string, taskId: string, attempt = 1) => {
-    const MAX_POLL = 60;
+    const MAX_POLL = 90;
     const INTERVAL = 5000;
 
     setTimeout(async () => {
@@ -244,7 +275,7 @@ export default function NewProject() {
               const res = await fetch('/api/generate-banner', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt, width: fmt.width, height: fmt.height, style: 'bold', archetype }),
+                body: JSON.stringify({ prompt, width: fmt.width, height: fmt.height, style: 'bold', archetype, offer: brief.offer || undefined }),
               });
 
               if (!res.ok) {
@@ -405,6 +436,61 @@ export default function NewProject() {
                   className="input-field"
                 />
               </div>
+            </div>
+
+            {/* Offer field */}
+            <div>
+              <label className="block text-white/50 text-xs font-medium mb-1.5">Оффер / УТП</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={brief.offer}
+                  onChange={e => setBrief(p => ({ ...p, offer: e.target.value }))}
+                  placeholder="Например: доставка и установка бесплатно"
+                  className="input-field flex-1"
+                />
+                <button
+                  type="button"
+                  onClick={handleGenerateOffer}
+                  disabled={offerLoading || !brief.product.trim()}
+                  className="shrink-0 px-3 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-1.5"
+                  style={{
+                    background: offerLoading || !brief.product.trim() ? 'rgba(255,255,255,0.05)' : ACCENT_BG,
+                    border:     `1px solid ${offerLoading || !brief.product.trim() ? 'rgba(255,255,255,0.08)' : ACCENT_BORDER}`,
+                    color:      offerLoading || !brief.product.trim() ? 'rgba(255,255,255,0.2)' : ACCENT,
+                    cursor:     offerLoading || !brief.product.trim() ? 'not-allowed' : 'pointer',
+                  }}
+                  title={!brief.product.trim() ? 'Сначала заполните поле «Продукт»' : offerSuggestions.length > 0 ? 'Сгенерировать ещё' : 'Сгенерировать оффер'}
+                >
+                  {offerLoading
+                    ? <Spinner />
+                    : offerSuggestions.length > 0
+                      ? '🔄'
+                      : '✨'}
+                  <span className="hidden sm:inline">
+                    {offerLoading ? 'Генерируем...' : offerSuggestions.length > 0 ? 'Ещё' : 'Генерировать'}
+                  </span>
+                </button>
+              </div>
+              {offerSuggestions.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {offerSuggestions.map((s, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setBrief(p => ({ ...p, offer: s }))}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all text-left"
+                      style={{
+                        background: brief.offer === s ? ACCENT_BG : 'rgba(255,255,255,0.05)',
+                        border:     `1px solid ${brief.offer === s ? ACCENT_BORDER : 'rgba(255,255,255,0.1)'}`,
+                        color:      brief.offer === s ? ACCENT : 'rgba(255,255,255,0.6)',
+                      }}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Platforms chips */}

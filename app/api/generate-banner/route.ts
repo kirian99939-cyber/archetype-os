@@ -8,6 +8,7 @@ export interface GenerateBannerRequest {
   height?: number;
   style?: string;
   archetype?: string;
+  offer?: string;
 }
 
 export interface GenerateBannerResponse {
@@ -40,8 +41,13 @@ async function generateBannerText(
   brief: string,
   archetype: string,
   textRules: TextRules,
+  offer?: string,
 ): Promise<BannerText> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+  const offerInstruction = offer
+    ? `\nОффер клиента: "${offer}"\nАдаптируй этот оффер под стиль архетипа, НЕ меняя ключевой смысл и конкретные факты (числа, сроки, условия).`
+    : '';
 
   const message = await client.messages.create({
     model: 'claude-opus-4-6',
@@ -53,7 +59,7 @@ async function generateBannerText(
 Бриф: ${brief}
 Архетип: ${archetype}
 Уровень текста: ${levelDescriptions[textRules.level]}
-Стиль текста: ${styleDescriptions[textRules.style]}
+Стиль текста: ${styleDescriptions[textRules.style]}${offerInstruction}
 
 Верни ТОЛЬКО валидный JSON без пояснений:
 {
@@ -73,7 +79,7 @@ async function generateBannerText(
   return JSON.parse(jsonMatch[0]);
 }
 
-function buildImagePrompt(req: GenerateBannerRequest, bannerText: BannerText | null): string {
+function buildImagePrompt(req: GenerateBannerRequest, bannerText: BannerText | null, offer?: string): string {
   const archetypeVisualMap: Record<string, string> = {
     mem: 'meme-style layout, bold impact font, internet culture aesthetics',
     trend: 'trending aesthetic, current visual style, hype atmosphere',
@@ -108,7 +114,10 @@ function buildImagePrompt(req: GenerateBannerRequest, bannerText: BannerText | n
   if (bannerText) {
     if (bannerText.headline) textInstructions.push(`Main headline text: "${bannerText.headline}"`);
     if (bannerText.offer) textInstructions.push(`Subheadline/offer text: "${bannerText.offer}"`);
+    else if (offer) textInstructions.push(`Subheadline/offer text: "${offer}"`);
     if (bannerText.cta) textInstructions.push(`CTA button text: "${bannerText.cta}"`);
+  } else if (offer) {
+    textInstructions.push(`Offer text: "${offer}"`);
   }
 
   return [
@@ -119,6 +128,7 @@ function buildImagePrompt(req: GenerateBannerRequest, bannerText: BannerText | n
       ? `Include the following text overlays: ${textInstructions.join('. ')}.`
       : 'No text or typography in the image.',
     `Aspect ratio optimized for ${req.width && req.height ? `${req.width}x${req.height}` : '16:9'} banner.`,
+    'ВАЖНО: Весь текст на баннере должен быть ТОЛЬКО на русском языке. Заголовок, CTA кнопка, любой текст — всё только по-русски.',
   ]
     .filter(Boolean)
     .join(' ');
@@ -155,7 +165,7 @@ export async function POST(req: NextRequest) {
       const archetypeDef = ARCHETYPES.find(a => a.id === body.archetype);
       if (archetypeDef?.textRules) {
         try {
-          bannerText = await generateBannerText(body.prompt, body.archetype, archetypeDef.textRules);
+          bannerText = await generateBannerText(body.prompt, body.archetype, archetypeDef.textRules, body.offer);
           console.log('[Banner] Generated text:', bannerText);
         } catch (err) {
           console.warn('[Banner] Claude text generation failed, skipping:', err);
@@ -163,7 +173,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const imagePrompt = buildImagePrompt(body, bannerText);
+    const imagePrompt = buildImagePrompt(body, bannerText, body.offer);
     const aspectRatio = getAspectRatio(body.width, body.height);
 
     const res = await fetch('https://api.nanobananaapi.ai/api/v1/nanobanana/generate-pro', {

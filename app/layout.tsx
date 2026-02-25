@@ -1,10 +1,23 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Inter, Unbounded, DM_Sans } from 'next/font/google';
+import AuthProvider from '@/components/AuthProvider';
 import './globals.css';
 
 const inter = Inter({
   subsets: ['latin', 'cyrillic'],
   variable: '--font-inter',
+  display: 'swap',
+});
+
+const unbounded = Unbounded({
+  subsets: ['latin', 'cyrillic'],
+  variable: '--font-unbounded',
+  display: 'swap',
+});
+
+const dmSans = DM_Sans({
+  subsets: ['latin'],
+  variable: '--font-dm-sans',
   display: 'swap',
 });
 
@@ -25,8 +38,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ru" className={inter.variable}>
-      <body className="min-h-screen antialiased">{children}</body>
+    <html lang="ru" className={`${inter.variable} ${unbounded.variable} ${dmSans.variable}`}>
+      <body className="min-h-screen antialiased">
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }

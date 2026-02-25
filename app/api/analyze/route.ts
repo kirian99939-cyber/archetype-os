@@ -7,6 +7,7 @@ const client = new Anthropic({
 });
 
 export interface AnalyzeRequest {
+  action?: 'generate-offer';
   // Legacy format (ArchetypeAnalyzer)
   productDescription?: string;
   targetAudience?: string;
@@ -19,6 +20,10 @@ export interface AnalyzeRequest {
   utp?: string;
   platforms?: string[];
   context?: string;
+}
+
+export interface OfferResponse {
+  offers: string[];
 }
 
 export interface Archetype {
@@ -106,6 +111,42 @@ export async function POST(req: NextRequest) {
     const productDesc = body.product || body.productDescription;
     const audience    = body.audience || body.targetAudience;
 
+    // ── generate-offer action ──────────────────────────────────────────────
+    if (body.action === 'generate-offer') {
+      if (!productDesc) {
+        return NextResponse.json(
+          { error: 'product is required for generate-offer' },
+          { status: 400 }
+        );
+      }
+
+      const lines = [`Продукт: ${productDesc}`];
+      if (audience) lines.push(`Аудитория: ${audience}`);
+
+      const offerMsg = await client.messages.create({
+        model: 'claude-opus-4-6',
+        max_tokens: 200,
+        messages: [{
+          role: 'user',
+          content: `Придумай 2 коротких сильных оффера (до 10 слов каждый) для рекламного баннера.
+
+${lines.join('\n')}
+
+Оффер должен быть конкретным — с чёткой выгодой или уникальностью. Без воды и общих фраз. Пример хорошего оффера: «Доставка и установка бесплатно», «Гарантия 3 года — или вернём деньги».
+
+Верни ТОЛЬКО валидный JSON без пояснений:
+{"offers": ["оффер 1", "оффер 2"]}`,
+        }],
+      });
+
+      const offerContent = offerMsg.content[0];
+      if (offerContent.type !== 'text') throw new Error('Unexpected Claude response');
+      const offerJsonMatch = offerContent.text.match(/\{[\s\S]*\}/);
+      if (!offerJsonMatch) throw new Error('No JSON in Claude response');
+      return NextResponse.json(JSON.parse(offerJsonMatch[0]) as OfferResponse);
+    }
+
+    // ── main analyze action ────────────────────────────────────────────────
     if (!productDesc || !audience) {
       return NextResponse.json(
         { error: 'product and audience are required' },
