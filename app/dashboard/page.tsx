@@ -12,6 +12,7 @@ import DashboardPage from '@/components/DashboardPage';
 import HistoryPage from '@/components/HistoryPage';
 import PricingSection from '@/components/PricingSection';
 import BannerLibraryPage from '@/components/BannerLibraryPage';
+import AdminPage from '@/components/AdminPage';
 
 type Page =
   | 'dashboard'
@@ -21,7 +22,8 @@ type Page =
   | 'analytics'
   | 'banner-library'
   | 'pricing'
-  | 'settings';
+  | 'settings'
+  | 'admin';
 
 const NAV_ITEMS: { id: Page; label: string; icon: string }[] = [
   { id: 'dashboard',   label: 'Панель управления', icon: '▦' },
@@ -34,6 +36,8 @@ const NAV_ITEMS: { id: Page; label: string; icon: string }[] = [
   { id: 'settings',    label: 'Настройки',          icon: '⚙' },
 ];
 
+const ADMIN_EMAILS = ['kirian99939@gmail.com'];
+
 const ACCENT = '#C8FF00';
 const ACCENT_BG = 'rgba(200,255,0,0.1)';
 const ACCENT_BORDER = 'rgba(200,255,0,0.25)';
@@ -44,6 +48,12 @@ export default function DashboardRoute() {
   const [activePage, setActivePage] = useState<Page>('dashboard');
   const [bannersBusy, setBannersBusy] = useState(false);
   const [pendingNav, setPendingNav] = useState<Page | null>(null);
+  const isAdmin = ADMIN_EMAILS.includes(session?.user?.email || '');
+
+  const navItems = [
+    ...NAV_ITEMS,
+    ...(isAdmin ? [{ id: 'admin' as Page, label: 'Админ', icon: '⚙️' }] : []),
+  ];
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -112,7 +122,7 @@ export default function DashboardRoute() {
         </div>
 
         <nav className="flex-1 px-2 py-3 flex flex-col gap-0.5">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const isActive = activePage === item.id;
             return (
               <button
@@ -143,7 +153,7 @@ export default function DashboardRoute() {
 
         <header className="h-14 border-b border-white/10 px-6 flex items-center justify-between shrink-0">
           <h1 className="text-white font-semibold text-base">
-            {NAV_ITEMS.find((i) => i.id === activePage)?.label}
+            {navItems.find((i) => i.id === activePage)?.label}
           </h1>
 
           <div className="flex items-center gap-3">
@@ -201,6 +211,7 @@ export default function DashboardRoute() {
             </div>
           )}
           {activePage === 'settings'    && <SettingsPage />}
+          {activePage === 'admin' && isAdmin && <AdminPage />}
           {activePage === 'history'     && <HistoryPage onNavigate={handleNavigate} />}
         </main>
       </div>
