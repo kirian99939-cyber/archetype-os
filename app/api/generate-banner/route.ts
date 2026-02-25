@@ -11,6 +11,8 @@ export interface GenerateBannerRequest {
   style?: string;
   archetype?: string;
   offer?: string;
+  /** URLs of product photos to use as the main visual (uploaded or linked) */
+  imageUrls?: string[];
   /** true только для первого запроса в пакете — списывает 1 кредит */
   isFirstBanner?: boolean;
 }
@@ -83,7 +85,7 @@ async function generateBannerText(
   return JSON.parse(jsonMatch[0]);
 }
 
-function buildImagePrompt(req: GenerateBannerRequest, bannerText: BannerText | null, offer?: string): string {
+function buildImagePrompt(req: GenerateBannerRequest, bannerText: BannerText | null, offer?: string, imageUrls?: string[]): string {
   const archetypeVisualMap: Record<string, string> = {
     mem: 'meme-style layout, bold impact font, internet culture aesthetics',
     trend: 'trending aesthetic, current visual style, hype atmosphere',
@@ -124,8 +126,11 @@ function buildImagePrompt(req: GenerateBannerRequest, bannerText: BannerText | n
     textInstructions.push(`Offer text: "${offer}"`);
   }
 
+  const hasProductImages = imageUrls && imageUrls.length > 0;
+
   return [
     `Advertising banner: ${req.prompt}.`,
+    hasProductImages ? 'Use the provided product image as the main visual element.' : '',
     archetypeDesc ? `Visual style: ${archetypeDesc}.` : '',
     'High quality, commercial advertising photography, professional graphic design.',
     textInstructions.length > 0
@@ -225,8 +230,18 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const imagePrompt = buildImagePrompt(body, bannerText, body.offer);
+    const activeImageUrls = body.imageUrls?.filter(Boolean);
+    const imagePrompt = buildImagePrompt(body, bannerText, body.offer, activeImageUrls);
     const aspectRatio = getAspectRatio(body.width, body.height);
+
+    const nanoBananaPayload: Record<string, unknown> = {
+      prompt: imagePrompt,
+      resolution: '2K',
+      aspectRatio,
+    };
+    if (activeImageUrls && activeImageUrls.length > 0) {
+      nanoBananaPayload.imageUrls = activeImageUrls;
+    }
 
     const res = await fetch('https://api.nanobananaapi.ai/api/v1/nanobanana/generate-pro', {
       method: 'POST',
@@ -234,7 +249,7 @@ export async function POST(req: NextRequest) {
         'Authorization': `Bearer ${process.env.NANO_BANANA_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ prompt: imagePrompt, resolution: '2K', aspectRatio }),
+      body: JSON.stringify(nanoBananaPayload),
     });
 
     if (!res.ok) {

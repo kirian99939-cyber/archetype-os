@@ -20,15 +20,20 @@ const STEP_LABELS = ['Бриф', 'Архетип', 'Гипотезы', 'Банн
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+type VisualMode = 'ai' | 'upload' | 'link';
+
 interface Brief {
-  product:   string;
-  price:     string;
-  audience:  string;
-  goal:      string;
-  utp:       string;
-  offer:     string;
-  platforms: string[];
-  context:   string;
+  product:    string;
+  price:      string;
+  audience:   string;
+  goal:       string;
+  utp:        string;
+  offer:      string;
+  platforms:  string[];
+  context:    string;
+  visualMode: VisualMode;
+  imageUrls:  string[];   // uploaded photo public URLs
+  imageLink:  string;     // manual link URL
 }
 
 interface BannerItem {
@@ -79,10 +84,16 @@ export default function NewProject() {
 
   const [brief, setBrief] = useState<Brief>({
     product: '', price: '', audience: '', goal: '', utp: '', offer: '', platforms: [], context: '',
+    visualMode: 'ai', imageUrls: [], imageLink: '',
   });
 
-  const [offerLoading, setOfferLoading]       = useState(false);
+  const [offerLoading, setOfferLoading]         = useState(false);
   const [offerSuggestions, setOfferSuggestions] = useState<string[]>([]);
+
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoDragOver,  setPhotoDragOver]  = useState(false);
+  const [photoError,     setPhotoError]     = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const [selectedArchetype, setSelectedArchetype] = useState<string | null>(null);
   // analyzeResult используется только для отображения AI-рекомендации архетипа на шаге 2
@@ -122,6 +133,47 @@ export default function NewProject() {
     });
 
   const goTo = (n: 1 | 2 | 3 | 4) => setStep(n);
+
+  // ── Photo upload ──
+
+  const ALLOWED_PHOTO_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+
+  const uploadPhotos = async (files: File[]) => {
+    setPhotoError(null);
+    const remaining = 3 - brief.imageUrls.length;
+    if (remaining <= 0) return;
+
+    const valid = files.filter(f => ALLOWED_PHOTO_TYPES.includes(f.type)).slice(0, remaining);
+    if (valid.length === 0) {
+      setPhotoError('Допустимые форматы: JPG, PNG, WEBP');
+      return;
+    }
+
+    setPhotoUploading(true);
+    try {
+      const urls = await Promise.all(
+        valid.map(async (file) => {
+          const fd = new FormData();
+          fd.append('file', file);
+          const res = await fetch('/api/upload-photo', { method: 'POST', body: fd });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: 'Ошибка загрузки' }));
+            throw new Error(err.error || `HTTP ${res.status}`);
+          }
+          const data = await res.json();
+          return data.url as string;
+        }),
+      );
+      setBrief(p => ({ ...p, imageUrls: [...p.imageUrls, ...urls].slice(0, 3) }));
+    } catch (err) {
+      setPhotoError(err instanceof Error ? err.message : 'Ошибка загрузки');
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
+  const removePhoto = (idx: number) =>
+    setBrief(p => ({ ...p, imageUrls: p.imageUrls.filter((_, i) => i !== idx) }));
 
   const switchTab = (gi: number) => {
     if (gi === activeBannerTab) return;
@@ -354,11 +406,18 @@ export default function NewProject() {
           BANNER_FORMATS.map(async (fmt, fmtIndex) => {
             // Первый баннер пакета: первый формат первой гипотезы
             const isFirstBanner = groupIndex === 0 && fmtIndex === 0;
+            // Resolve product image URLs from the brief visual selection
+            const briefImageUrls: string[] =
+              brief.visualMode === 'upload' && brief.imageUrls.length > 0
+                ? brief.imageUrls
+                : brief.visualMode === 'link' && brief.imageLink.trim()
+                ? [brief.imageLink.trim()]
+                : [];
             try {
               const res = await fetch('/api/generate-banner', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt, width: fmt.width, height: fmt.height, style: 'bold', archetype, offer: brief.offer || undefined, isFirstBanner }),
+                body: JSON.stringify({ prompt, width: fmt.width, height: fmt.height, style: 'bold', archetype, offer: brief.offer || undefined, isFirstBanner, imageUrls: briefImageUrls.length > 0 ? briefImageUrls : undefined }),
               });
 
               // Кредиты закончились
@@ -624,6 +683,134 @@ export default function NewProject() {
                 placeholder="Сезонность, конкуренты, тон голоса, особые пожелания..."
                 className="input-field resize-none"
               />
+            </div>
+
+            {/* Product visual */}
+            <div>
+              <label className="block text-white/50 text-xs font-medium mb-2">Визуал продукта</label>
+
+              {/* Mode selector */}
+              <div className="flex flex-wrap gap-2 mb-3">
+                {([
+                  { id: 'ai',     icon: '🤖', label: 'Сгенерировать AI' },
+                  { id: 'upload', icon: '📸', label: 'Загрузить фото' },
+                  { id: 'link',   icon: '🔗', label: 'Вставить ссылку' },
+                ] as { id: VisualMode; icon: string; label: string }[]).map(mode => {
+                  const active = brief.visualMode === mode.id;
+                  return (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => setBrief(p => ({ ...p, visualMode: mode.id }))}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all"
+                      style={{
+                        background:  active ? ACCENT_BG : 'rgba(255,255,255,0.05)',
+                        border:      `1px solid ${active ? ACCENT : 'rgba(255,255,255,0.09)'}`,
+                        color:       active ? ACCENT : 'rgba(255,255,255,0.5)',
+                      }}
+                    >
+                      <span>{mode.icon}</span>
+                      <span>{mode.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Upload zone */}
+              {brief.visualMode === 'upload' && (
+                <div className="space-y-3">
+                  {/* Hidden file input */}
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    className="hidden"
+                    onChange={e => {
+                      if (e.target.files) uploadPhotos(Array.from(e.target.files));
+                      e.target.value = '';
+                    }}
+                  />
+
+                  {/* Drag & drop zone (only when under limit) */}
+                  {brief.imageUrls.length < 3 && (
+                    <div
+                      className="rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 py-8 px-4 transition-all cursor-pointer"
+                      style={{
+                        borderColor: photoDragOver ? ACCENT : 'rgba(255,255,255,0.12)',
+                        background:  photoDragOver ? ACCENT_BG : 'rgba(255,255,255,0.02)',
+                      }}
+                      onDragOver={e => { e.preventDefault(); setPhotoDragOver(true); }}
+                      onDragLeave={() => setPhotoDragOver(false)}
+                      onDrop={e => {
+                        e.preventDefault();
+                        setPhotoDragOver(false);
+                        uploadPhotos(Array.from(e.dataTransfer.files));
+                      }}
+                      onClick={() => photoInputRef.current?.click()}
+                    >
+                      {photoUploading ? (
+                        <div className="flex items-center gap-2" style={{ color: ACCENT }}>
+                          <Spinner />
+                          <span className="text-sm">Загружаем...</span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="text-2xl opacity-50">📁</div>
+                          <p className="text-white/50 text-sm text-center">
+                            Перетащите фото сюда или{' '}
+                            <span style={{ color: ACCENT }}>выберите файл</span>
+                          </p>
+                          <p className="text-white/25 text-xs">
+                            JPG, PNG, WEBP · до 10 МБ · максимум {3 - brief.imageUrls.length} фото
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Error */}
+                  {photoError && (
+                    <p className="text-red-400 text-xs">{photoError}</p>
+                  )}
+
+                  {/* Photo previews */}
+                  {brief.imageUrls.length > 0 && (
+                    <div className="flex flex-wrap gap-3">
+                      {brief.imageUrls.map((url, i) => (
+                        <div key={i} className="relative group">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={url}
+                            alt={`Фото ${i + 1}`}
+                            className="w-24 h-24 object-cover rounded-xl"
+                            style={{ border: `1px solid rgba(255,255,255,0.1)` }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removePhoto(i)}
+                            className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold transition-opacity"
+                            style={{ background: '#ff4444', color: '#fff' }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Link input */}
+              {brief.visualMode === 'link' && (
+                <input
+                  type="url"
+                  value={brief.imageLink}
+                  onChange={e => setBrief(p => ({ ...p, imageLink: e.target.value }))}
+                  placeholder="https://example.com/product.jpg"
+                  className="input-field"
+                />
+              )}
             </div>
 
             <div className="flex justify-end pt-1">
