@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { getCredits, spendCredit } from '@/lib/supabase';
 import { ARCHETYPES, type TextRules } from '@/lib/archetypes';
 
 export interface GenerateBannerRequest {
@@ -9,6 +12,8 @@ export interface GenerateBannerRequest {
   style?: string;
   archetype?: string;
   offer?: string;
+  /** true только для первого запроса в пакете — списывает 1 кредит */
+  isFirstBanner?: boolean;
 }
 
 export interface GenerateBannerResponse {
@@ -157,6 +162,30 @@ export async function POST(req: NextRequest) {
         { error: 'prompt is required' },
         { status: 400 }
       );
+    }
+
+    // ── Проверка и списание кредитов (только для первого баннера в пакете) ──
+    if (body.isFirstBanner) {
+      const session = await getServerSession(authOptions);
+
+      if (!session?.user?.id) {
+        return NextResponse.json(
+          { error: 'Необходима авторизация' },
+          { status: 401 }
+        );
+      }
+
+      const credits = await getCredits(session.user.id);
+
+      if (credits <= 0) {
+        return NextResponse.json(
+          { error: 'NO_CREDITS' },
+          { status: 403 }
+        );
+      }
+
+      await spendCredit(session.user.id);
+      console.log(`[Credits] Spent 1 credit for user ${session.user.id}. Remaining: ${credits - 1}`);
     }
 
     // Генерируем текст через Claude если есть textRules для архетипа

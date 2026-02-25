@@ -100,6 +100,7 @@ export default function NewProject() {
   const [selectedHypotheses, setSelectedHypotheses] = useState<Set<number>>(new Set());
   const [bannerGroups, setBannerGroups]             = useState<BannerGroup[]>([]);
   const [activeBannerTab, setActiveBannerTab]       = useState(0);
+  const [showNoCreditsModal, setShowNoCreditsModal] = useState(false);
 
   // ── Helpers ──
 
@@ -339,13 +340,29 @@ export default function NewProject() {
           : basePrompt;
 
         await Promise.allSettled(
-          BANNER_FORMATS.map(async (fmt) => {
+          BANNER_FORMATS.map(async (fmt, fmtIndex) => {
+            // Первый баннер пакета: первый формат первой гипотезы
+            const isFirstBanner = groupIndex === 0 && fmtIndex === 0;
             try {
               const res = await fetch('/api/generate-banner', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt, width: fmt.width, height: fmt.height, style: 'bold', archetype, offer: brief.offer || undefined }),
+                body: JSON.stringify({ prompt, width: fmt.width, height: fmt.height, style: 'bold', archetype, offer: brief.offer || undefined, isFirstBanner }),
               });
+
+              // Кредиты закончились
+              if (res.status === 403) {
+                setShowNoCreditsModal(true);
+                setBannerGroups(prev => prev.map((g, gi) =>
+                  gi !== groupIndex ? g : {
+                    ...g,
+                    banners: g.banners.map(b =>
+                      b.key === fmt.key ? { ...b, loading: false, error: 'Недостаточно кредитов' } : b
+                    ),
+                  }
+                ));
+                return;
+              }
 
               if (!res.ok) {
                 const err = await res.json().catch(() => ({ error: 'Ошибка' }));
@@ -1000,6 +1017,49 @@ export default function NewProject() {
 
           <div className="flex justify-start">
             <button onClick={() => goTo(3)} className="btn-secondary">← Назад</button>
+          </div>
+        </div>
+      )}
+      {/* ══════════════════ MODAL: NO CREDITS ══════════════════ */}
+      {showNoCreditsModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
+          onClick={() => setShowNoCreditsModal(false)}
+        >
+          <div
+            className="glass-card p-8 max-w-sm w-full text-center"
+            style={{ border: `1px solid ${ACCENT_BORDER}` }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div
+              className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-5"
+              style={{ background: 'rgba(200,255,0,0.1)', border: `1px solid ${ACCENT_BORDER}` }}
+            >
+              <span style={{ fontSize: '1.5rem' }}>⚡</span>
+            </div>
+            <h3 className="text-white font-bold text-lg mb-2">Кредиты закончились</h3>
+            <p className="text-white/50 text-sm leading-relaxed mb-6">
+              У вас не осталось кредитов для генерации баннеров.<br />
+              Напишите нам — мы пополним баланс.
+            </p>
+            <div className="flex flex-col gap-3">
+              <a
+                href="https://t.me/archetype_protocol"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-primary text-sm text-center no-underline"
+                style={{ display: 'block' }}
+              >
+                Написать в Telegram
+              </a>
+              <button
+                onClick={() => setShowNoCreditsModal(false)}
+                className="btn-secondary text-sm"
+              >
+                Закрыть
+              </button>
+            </div>
           </div>
         </div>
       )}
