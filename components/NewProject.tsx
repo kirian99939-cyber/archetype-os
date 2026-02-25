@@ -650,21 +650,14 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
     );
   };
 
-  const handleDownload = async (banner: BannerItem) => {
+  const handleDownload = (banner: BannerItem) => {
     if (!banner.imageUrl) return;
-    try {
-      const res = await fetch(banner.imageUrl);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `banner-${banner.key}-${Date.now()}.png`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      // Fallback: открыть в новой вкладке если blob не сработал
-      window.open(banner.imageUrl, '_blank');
-    }
+    const a = document.createElement('a');
+    a.href = `/api/download-image?url=${encodeURIComponent(banner.imageUrl)}`;
+    a.download = `banner-${banner.key}-${Date.now()}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   const activeArchetype = selectedArchetypes.length > 0
