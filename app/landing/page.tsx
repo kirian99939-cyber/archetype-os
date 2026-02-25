@@ -211,6 +211,125 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ─────────────────────────────── СРАВНЕНИЕ ─────────────────────────────── */}
+      <section className="landing-section" style={{ padding: '88px 24px' }}>
+        <div className="text-center mb-12">
+          <h2
+            className="font-extrabold mb-3"
+            style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(1.5rem, 3vw, 2.2rem)', lineHeight: 1.2 }}
+          >
+            Почему это выгодно
+          </h2>
+          <p className="text-sm mx-auto" style={{ color: 'var(--text-muted)', maxWidth: 480, lineHeight: 1.65 }}>
+            Сравните: классический подход vs Архетип-Протокол
+          </p>
+        </div>
+
+        <div className="max-w-3xl mx-auto">
+          {/* Заголовки колонок */}
+          <div className="grid grid-cols-3 gap-4 mb-3 px-4">
+            <div />
+            <div className="text-center">
+              <span
+                className="inline-block text-[10px] uppercase tracking-widest font-bold px-3 py-1 rounded-full"
+                style={{ background: 'rgba(255,60,60,0.1)', color: '#ff6b6b', border: '1px solid rgba(255,60,60,0.2)' }}
+              >
+                Без нас
+              </span>
+            </div>
+            <div className="text-center">
+              <span
+                className="inline-block text-[10px] uppercase tracking-widest font-bold px-3 py-1 rounded-full"
+                style={{ background: 'rgba(200,255,0,0.1)', color: '#C8FF00', border: '1px solid rgba(200,255,0,0.25)' }}
+              >
+                С нами
+              </span>
+            </div>
+          </div>
+
+          {/* Строки сравнения */}
+          {[
+            {
+              label: '⏱ Время на пакет баннеров',
+              without: '4–8 часов',
+              withUs: '~2 минуты',
+            },
+            {
+              label: '💰 Стоимость',
+              without: 'от 5 000 ₽',
+              withUs: 'от 250 ₽',
+            },
+            {
+              label: '🎯 Стратегия и архетипы',
+              without: 'Ручной подбор, интуиция',
+              withUs: 'AI на базе 26 архетипов',
+            },
+            {
+              label: '📐 Форматы',
+              without: '1 формат за раз',
+              withUs: '3 формата сразу (Feed, Stories, Banner)',
+            },
+            {
+              label: '🔄 Гипотезы',
+              without: '1–2 варианта от дизайнера',
+              withUs: 'До 10 гипотез с разными архетипами',
+            },
+            {
+              label: '📊 Итерации',
+              without: 'Каждая правка — новый день',
+              withUs: 'Новая итерация за 2 минуты',
+            },
+          ].map((row, i) => (
+            <div
+              key={i}
+              className="grid grid-cols-3 gap-4 px-4 py-4 rounded-xl transition-all"
+              style={{
+                background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                borderBottom: '1px solid rgba(255,255,255,0.05)',
+              }}
+            >
+              <div className="text-sm text-white/70 font-medium flex items-center">
+                {row.label}
+              </div>
+              <div className="text-center flex items-center justify-center">
+                <span
+                  className="text-sm px-3 py-1.5 rounded-lg inline-block"
+                  style={{ background: 'rgba(255,60,60,0.06)', color: '#ff6b6b' }}
+                >
+                  {row.without}
+                </span>
+              </div>
+              <div className="text-center flex items-center justify-center">
+                <span
+                  className="text-sm font-semibold px-3 py-1.5 rounded-lg inline-block"
+                  style={{ background: 'rgba(200,255,0,0.08)', color: '#C8FF00' }}
+                >
+                  {row.withUs}
+                </span>
+              </div>
+            </div>
+          ))}
+
+          {/* Итоговая строка */}
+          <div
+            className="mt-6 rounded-2xl p-5 text-center"
+            style={{ background: 'rgba(200,255,0,0.05)', border: '1px solid rgba(200,255,0,0.15)' }}
+          >
+            <p className="text-white/60 text-sm mb-2">Средняя экономия на 10 проектов</p>
+            <div className="flex items-center justify-center gap-8 flex-wrap">
+              <div>
+                <span className="text-2xl font-extrabold" style={{ color: '#C8FF00' }}>~45 часов</span>
+                <p className="text-white/30 text-xs mt-0.5">времени</p>
+              </div>
+              <div>
+                <span className="text-2xl font-extrabold" style={{ color: '#C8FF00' }}>~47 500 ₽</span>
+                <p className="text-white/30 text-xs mt-0.5">бюджета</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ─────────────────────── 26 АРХЕТИПОВ ─────────────────────── */}
       <section className="landing-section overflow-hidden" style={{ padding: '88px 0' }}>
         <div className="mx-auto text-center px-6 mb-12" style={{ maxWidth: 1100 }}>
