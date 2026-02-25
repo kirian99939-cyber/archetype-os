@@ -11,6 +11,7 @@ import AnalyticsPage from '@/components/AnalyticsPage';
 import DashboardPage from '@/components/DashboardPage';
 import HistoryPage from '@/components/HistoryPage';
 import PricingSection from '@/components/PricingSection';
+import BannerLibraryPage from '@/components/BannerLibraryPage';
 
 type Page =
   | 'dashboard'
@@ -18,6 +19,7 @@ type Page =
   | 'archetypes'
   | 'history'
   | 'analytics'
+  | 'banner-library'
   | 'pricing'
   | 'settings';
 
@@ -27,6 +29,7 @@ const NAV_ITEMS: { id: Page; label: string; icon: string }[] = [
   { id: 'archetypes',  label: 'Архетипы',           icon: '◈' },
   { id: 'history',     label: 'История генераций',  icon: '◷' },
   { id: 'analytics',   label: 'Аналитика',          icon: '↗' },
+  { id: 'banner-library' as Page, label: 'Все баннеры', icon: '📚' },
   { id: 'pricing' as Page, label: 'Тарифы', icon: '⚡' },
   { id: 'settings',    label: 'Настройки',          icon: '⚙' },
 ];
@@ -186,6 +189,7 @@ export default function DashboardRoute() {
           {activePage === 'archetypes'  && <ArchetypesPage />}
           {activePage === 'new-project' && <NewProject onBusyChange={setBannersBusy} />}
           {activePage === 'analytics'   && <AnalyticsPage />}
+          {activePage === 'banner-library' && <BannerLibraryPage />}
           {activePage === 'pricing'    && (
             <div className="max-w-5xl mx-auto">
               <PricingSection
