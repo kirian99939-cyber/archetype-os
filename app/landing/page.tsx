@@ -1,17 +1,9 @@
 'use client';
 
-import Link from 'next/link';
 import { signIn, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-
-const ARCHETYPES = [
-  'Герой', 'Мудрец', 'Искатель', 'Бунтарь', 'Маг', 'Правитель',
-  'Любовник', 'Шут', 'Обычный парень', 'Заботливый', 'Творец', 'Невинный',
-  'Мечтатель', 'Защитник', 'Первооткрыватель', 'Вдохновитель', 'Провокатор',
-  'Наставник', 'Трикстер', 'Воин', 'Целитель', 'Пионер', 'Аристократ',
-  'Ребёнок', 'Тень', 'Анима',
-];
+import { ARCHETYPES } from '@/lib/archetypes';
 
 const NAV_LINKS = ['Как работает', 'Архетипы', 'Кейсы', 'Цены'];
 
@@ -40,7 +32,6 @@ export default function LandingPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  // Если пользователь уже авторизован — сразу в дашборд
   useEffect(() => {
     if (status === 'authenticated') {
       router.replace('/dashboard');
@@ -58,7 +49,6 @@ export default function LandingPage() {
         style={{ borderColor: 'var(--border)', background: 'rgba(10,10,10,0.88)', backdropFilter: 'blur(16px)' }}
       >
         <div className="flex items-center justify-between mx-auto px-6" style={{ maxWidth: 1160, height: 64 }}>
-          {/* Logo */}
           <div className="flex items-center gap-2.5">
             <span style={{ color: 'var(--accent)', fontSize: '1.2rem' }}>⚡</span>
             <span className="text-white font-bold text-sm leading-snug" style={{ fontFamily: 'var(--font-display)' }}>
@@ -66,14 +56,12 @@ export default function LandingPage() {
             </span>
           </div>
 
-          {/* Links — hidden on mobile */}
           <div className="hidden md:flex items-center gap-7">
             {NAV_LINKS.map((link) => (
               <a key={link} href="#" className="nav-link text-sm no-underline">{link}</a>
             ))}
           </div>
 
-          {/* Auth */}
           <button onClick={handleSignIn} className="btn-primary text-sm" style={{ fontFamily: 'var(--font-display)', border: 'none', cursor: 'pointer' }}>
             Войти
           </button>
@@ -82,7 +70,6 @@ export default function LandingPage() {
 
       {/* ─────────────────────────── HERO ─────────────────────────── */}
       <section className="hero-grid relative overflow-hidden text-center" style={{ padding: '96px 24px 88px' }}>
-        {/* Ambient orbs */}
         <div className="animate-orb pointer-events-none absolute" style={{
           top: '5%', left: '5%', width: 480, height: 480,
           background: 'radial-gradient(circle, rgba(200,255,0,0.07) 0%, transparent 65%)',
@@ -94,7 +81,6 @@ export default function LandingPage() {
         }} />
 
         <div className="relative mx-auto" style={{ maxWidth: 880, zIndex: 1 }}>
-          {/* Badge */}
           <div className="animate-fade-up inline-flex items-center gap-2 border rounded-full mb-9 text-xs" style={{
             borderColor: 'rgba(200,255,0,0.3)',
             color: 'var(--accent)', padding: '6px 18px',
@@ -243,9 +229,9 @@ export default function LandingPage() {
             style={{ background: 'linear-gradient(-90deg, var(--background) 0%, transparent 100%)' }} />
           <div className="overflow-hidden">
             <div className="animate-marquee flex gap-3" style={{ width: 'max-content', padding: '8px 0 8px 12px' }}>
-              {[...ARCHETYPES, ...ARCHETYPES].map((name, i) => (
+              {[...ARCHETYPES, ...ARCHETYPES].map((arch, i) => (
                 <div key={i} className="archetype-pill whitespace-nowrap text-sm" style={{ padding: '10px 22px' }}>
-                  {name}
+                  {arch.icon} {arch.label}
                 </div>
               ))}
             </div>
@@ -261,7 +247,6 @@ export default function LandingPage() {
             background: 'radial-gradient(ellipse at 50% 0%, rgba(200,255,0,0.1) 0%, transparent 65%)',
             padding: '68px 40px',
           }}>
-            {/* Icon */}
             <div className="mx-auto mb-7 flex items-center justify-center border rounded-full" style={{
               width: 44, height: 44,
               background: 'var(--accent-muted)',
