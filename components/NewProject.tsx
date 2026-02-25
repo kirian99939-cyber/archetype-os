@@ -448,14 +448,6 @@ export default function NewProject() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bannerGroups]);
 
-  useEffect(() => {
-    if (!anyBannerLoading) return;
-    const interval = setInterval(() => {
-      setLoadingPhrase(prev => (prev + 1) % LOADING_PHRASES.length);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [anyBannerLoading]);
-
   // ── Step 4: banners ──
 
   const pollBanner = (groupIndex: number, fmtKey: string, taskId: string, attempt = 1) => {
@@ -641,6 +633,14 @@ export default function NewProject() {
   const activeArchetype = selectedArchetype || analyzeResult?.primaryArchetype || null;
   const anyBannerLoading = bannerGroups.some(g => g.banners.some(b => b.loading));
   const activeBannerGroup = bannerGroups[activeBannerTab] ?? null;
+
+  useEffect(() => {
+    if (!anyBannerLoading) return;
+    const interval = setInterval(() => {
+      setLoadingPhrase(prev => (prev + 1) % LOADING_PHRASES.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [anyBannerLoading]);
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
