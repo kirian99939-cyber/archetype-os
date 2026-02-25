@@ -252,7 +252,7 @@ ${lines.join('\n')}
 
       const allHypotheses: NewHypothesis[] = [];
 
-      for (const arch of archetypesToProcess) {
+      await Promise.all(archetypesToProcess.map(async (arch) => {
         const archDef = ARCHETYPES.find(a => a.id === arch.id);
         const archLabel = archDef?.label ?? arch.label;
         const archFormula = archDef?.formula ?? '';
@@ -297,7 +297,7 @@ ${lines.join('\n')}
         });
 
         const hypoContent = hypoMsg.content[0];
-        if (hypoContent.type !== 'text') continue;
+        if (hypoContent.type !== 'text') return;
 
         try {
           const hypoResult = extractJSON(hypoContent.text) as Record<string, unknown>;
@@ -317,9 +317,9 @@ ${lines.join('\n')}
             });
           });
         } catch {
-          // Skip failed archetype, continue with others
+          // Skip failed archetype
         }
-      }
+      }));
 
       return NextResponse.json({ newHypotheses: allHypotheses });
     }
