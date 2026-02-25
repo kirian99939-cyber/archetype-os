@@ -10,6 +10,7 @@ import SettingsPage from '@/components/SettingsPage';
 import AnalyticsPage from '@/components/AnalyticsPage';
 import DashboardPage from '@/components/DashboardPage';
 import HistoryPage from '@/components/HistoryPage';
+import PricingSection from '@/components/PricingSection';
 
 type Page =
   | 'dashboard'
@@ -17,6 +18,7 @@ type Page =
   | 'archetypes'
   | 'history'
   | 'analytics'
+  | 'pricing'
   | 'settings';
 
 const NAV_ITEMS: { id: Page; label: string; icon: string }[] = [
@@ -25,6 +27,7 @@ const NAV_ITEMS: { id: Page; label: string; icon: string }[] = [
   { id: 'archetypes',  label: 'Архетипы',           icon: '◈' },
   { id: 'history',     label: 'История генераций',  icon: '◷' },
   { id: 'analytics',   label: 'Аналитика',          icon: '↗' },
+  { id: 'pricing' as Page, label: 'Тарифы', icon: '⚡' },
   { id: 'settings',    label: 'Настройки',          icon: '⚙' },
 ];
 
@@ -183,6 +186,16 @@ export default function DashboardRoute() {
           {activePage === 'archetypes'  && <ArchetypesPage />}
           {activePage === 'new-project' && <NewProject onBusyChange={setBannersBusy} />}
           {activePage === 'analytics'   && <AnalyticsPage />}
+          {activePage === 'pricing'    && (
+            <div className="max-w-5xl mx-auto">
+              <PricingSection
+                isLoggedIn={true}
+                onSelectPlan={(planId) => {
+                  window.open('https://t.me/archetype_protocol', '_blank');
+                }}
+              />
+            </div>
+          )}
           {activePage === 'settings'    && <SettingsPage />}
           {activePage === 'history'     && <HistoryPage onNavigate={handleNavigate} />}
         </main>

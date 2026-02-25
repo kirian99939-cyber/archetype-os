@@ -4,8 +4,13 @@ import { signIn, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { ARCHETYPES } from '@/lib/archetypes';
+import PricingSection from '@/components/PricingSection';
 
-const NAV_LINKS = ['Как работает', 'Архетипы', 'Кейсы', 'Цены'];
+const NAV_LINKS = [
+  { label: 'Как работает', href: '#how-it-works' },
+  { label: 'Архетипы', href: '#archetypes' },
+  { label: 'Цены', href: '#pricing' },
+];
 
 const STEPS = [
   {
@@ -58,7 +63,7 @@ export default function LandingPage() {
 
           <div className="hidden md:flex items-center gap-7">
             {NAV_LINKS.map((link) => (
-              <a key={link} href="#" className="nav-link text-sm no-underline">{link}</a>
+              <a key={link.label} href={link.href} className="nav-link text-sm no-underline">{link.label}</a>
             ))}
           </div>
 
@@ -237,6 +242,11 @@ export default function LandingPage() {
             </div>
           </div>
         </div>
+      </section>
+
+      {/* ─────────────────────────── ТАРИФЫ ─────────────────────────── */}
+      <section id="pricing" className="landing-section" style={{ padding: '88px 24px' }}>
+        <PricingSection />
       </section>
 
       {/* ─────────────────────────── CTA ─────────────────────────── */}
