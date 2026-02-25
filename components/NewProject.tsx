@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import type { AnalyzeResponse, NewHypothesis } from '@/app/api/analyze/route';
 import { ARCHETYPES } from '@/lib/archetypes';
@@ -85,9 +85,17 @@ export default function NewProject() {
   const [offerSuggestions, setOfferSuggestions] = useState<string[]>([]);
 
   const [selectedArchetype, setSelectedArchetype] = useState<string | null>(null);
+  // analyzeResult используется только для отображения AI-рекомендации архетипа на шаге 2
   const [analyzeResult, setAnalyzeResult]         = useState<AnalyzeResponse | null>(null);
   const [analyzeLoading, setAnalyzeLoading]       = useState(false);
   const [analyzeError, setAnalyzeError]           = useState<string | null>(null);
+
+  // Гипотезы генерируются отдельно на шаге 3
+  const [hypotheses, setHypotheses]               = useState<NewHypothesis[]>([]);
+  const [hypothesesLoading, setHypothesesLoading] = useState(false);
+  const [hypothesesError, setHypothesesError]     = useState<string | null>(null);
+  // Отслеживаем для какого архетипа уже сгенерированы гипотезы
+  const lastHypothesesArchetype                   = useRef<string | null>(null);
 
   const [selectedHypotheses, setSelectedHypotheses] = useState<Set<number>>(new Set());
   const [bannerGroups, setBannerGroups]             = useState<BannerGroup[]>([]);
@@ -140,9 +148,9 @@ export default function NewProject() {
     }
   };
 
-  // ── Step 2: analyze ──
+  // ── Step 2: только рекомендация архетипа, без гипотез ──
 
-  const handleAnalyze = async () => {
+  const handleSuggestArchetype = async () => {
     setAnalyzeLoading(true);
     setAnalyzeError(null);
     try {
@@ -150,6 +158,7 @@ export default function NewProject() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action:    'suggest-archetype',
           product:   brief.product,
           price:     brief.price,
           audience:  brief.audience,
@@ -165,18 +174,78 @@ export default function NewProject() {
       }
       const data: AnalyzeResponse = await res.json();
       setAnalyzeResult(data);
+      // Автовыбираем рекомендованный архетип если ещё не выбран
       if (data.primaryArchetype && !selectedArchetype) {
         setSelectedArchetype(data.primaryArchetype);
       }
-      // Auto-select all returned hypotheses (up to 5)
-      const count = Math.min(data.newHypotheses?.length ?? 0, 5);
-      setSelectedHypotheses(new Set(Array.from({ length: count }, (_, i) => i)));
+      // Гипотезы НЕ генерируются здесь
     } catch (err) {
       setAnalyzeError(err instanceof Error ? err.message : 'Ошибка анализа');
     } finally {
       setAnalyzeLoading(false);
     }
   };
+
+  // ── Step 3: генерация гипотез строго под выбранный архетип ──
+
+  const handleGenerateHypotheses = async (archetypeId: string) => {
+    const archetypeDef = ARCHETYPES.find(a => a.id === archetypeId);
+    setHypothesesLoading(true);
+    setHypothesesError(null);
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'generate-hypotheses',
+          selectedArchetype: {
+            id:    archetypeId,
+            label: archetypeDef?.label ?? archetypeId,
+          },
+          product:   brief.product,
+          price:     brief.price,
+          audience:  brief.audience,
+          goal:      brief.goal,
+          utp:       brief.utp,
+          offer:     brief.offer,
+          platforms: brief.platforms,
+          context:   brief.context,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Ошибка генерации' }));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      const generated: NewHypothesis[] = data.newHypotheses ?? [];
+      setHypotheses(generated);
+      lastHypothesesArchetype.current = archetypeId;
+      // Автовыбираем все сгенерированные гипотезы
+      setSelectedHypotheses(new Set(Array.from({ length: Math.min(generated.length, 5) }, (_, i) => i)));
+    } catch (err) {
+      setHypothesesError(err instanceof Error ? err.message : 'Ошибка генерации гипотез');
+    } finally {
+      setHypothesesLoading(false);
+    }
+  };
+
+  // Сбрасываем гипотезы когда меняется архетип
+  useEffect(() => {
+    if (lastHypothesesArchetype.current !== null && lastHypothesesArchetype.current !== selectedArchetype) {
+      setHypotheses([]);
+      setSelectedHypotheses(new Set());
+      setHypothesesError(null);
+      lastHypothesesArchetype.current = null;
+    }
+  }, [selectedArchetype]);
+
+  // При входе на шаг 3 — генерируем гипотезы если ещё нет
+  useEffect(() => {
+    if (step === 3 && selectedArchetype && hypotheses.length === 0 && !hypothesesLoading) {
+      handleGenerateHypotheses(selectedArchetype);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   // ── Step 4: banners ──
 
@@ -321,7 +390,6 @@ export default function NewProject() {
   };
 
   const activeArchetype = selectedArchetype || analyzeResult?.primaryArchetype || null;
-  const hypotheses: NewHypothesis[] = analyzeResult?.newHypotheses ?? [];
   const anyBannerLoading = bannerGroups.some(g => g.banners.some(b => b.loading));
   const activeBannerGroup = bannerGroups[activeBannerTab] ?? null;
 
@@ -552,14 +620,14 @@ export default function NewProject() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
               <div>
                 <h2 className="text-white font-semibold text-lg">Подбор архетипа</h2>
-                <p className="text-white/35 text-sm mt-0.5">AI проанализирует бриф и порекомендует архетип + гипотезы</p>
+                <p className="text-white/35 text-sm mt-0.5">AI проанализирует бриф и порекомендует подходящий архетип</p>
               </div>
               <button
-                onClick={handleAnalyze}
+                onClick={handleSuggestArchetype}
                 disabled={analyzeLoading}
                 className="btn-primary flex items-center gap-2 shrink-0"
               >
-                {analyzeLoading ? <><Spinner />Анализируем...</> : '✦ Подобрать архетип'}
+                {analyzeLoading ? <><Spinner />Анализируем...</> : '✦ Получить рекомендацию'}
               </button>
             </div>
 
@@ -639,7 +707,7 @@ export default function NewProject() {
             <button onClick={() => goTo(1)} className="btn-secondary">← Назад</button>
             <button
               onClick={() => goTo(3)}
-              disabled={!analyzeResult && !selectedArchetype}
+              disabled={!selectedArchetype}
               className="btn-primary"
             >
               Далее →
@@ -661,22 +729,42 @@ export default function NewProject() {
                 </p>
               )}
             </div>
-            {hypotheses.length > 0 && (
+            {hypotheses.length > 0 && !hypothesesLoading && (
               <p className="text-white/30 text-xs shrink-0">
                 Выбрано: {selectedHypotheses.size} из {Math.min(hypotheses.length, 5)}
               </p>
             )}
           </div>
 
-          {hypotheses.length === 0 ? (
+          {hypothesesLoading ? (
+            <div className="glass-card p-12 text-center">
+              <div
+                className="w-10 h-10 rounded-full border-2 animate-spin mx-auto mb-4"
+                style={{ borderColor: ACCENT, borderTopColor: 'transparent' }}
+              />
+              <p className="text-white/60 text-sm mb-1">
+                Генерируем гипотезы под архетип&nbsp;
+                <span style={{ color: ACCENT }}>
+                  {ARCHETYPES.find(a => a.id === activeArchetype)?.label ?? activeArchetype}
+                </span>
+              </p>
+              <p className="text-white/25 text-xs">Обычно занимает 10–20 секунд</p>
+            </div>
+          ) : hypothesesError ? (
+            <div className="glass-card p-10 text-center">
+              <div className="text-3xl mb-3">⚠️</div>
+              <p className="text-red-400 text-sm mb-4">{hypothesesError}</p>
+              <button
+                onClick={() => selectedArchetype && handleGenerateHypotheses(selectedArchetype)}
+                className="btn-primary text-sm px-6"
+              >
+                Попробовать снова
+              </button>
+            </div>
+          ) : hypotheses.length === 0 ? (
             <div className="glass-card p-10 text-center">
               <div className="text-3xl mb-3">🔮</div>
-              <p className="text-white/40 text-sm mb-4">
-                Нажмите «Подобрать архетип» на шаге 2, чтобы AI сгенерировал гипотезы
-              </p>
-              <button onClick={() => goTo(2)} className="btn-secondary text-sm px-5 py-2">
-                ← К шагу 2
-              </button>
+              <p className="text-white/40 text-sm">Загружаем гипотезы...</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
@@ -750,7 +838,7 @@ export default function NewProject() {
             <button onClick={() => goTo(2)} className="btn-secondary">← Назад</button>
             <button
               onClick={() => goTo(4)}
-              disabled={selectedHypotheses.size === 0}
+              disabled={selectedHypotheses.size === 0 || hypothesesLoading}
               className="btn-primary"
             >
               Далее →

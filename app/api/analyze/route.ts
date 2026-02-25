@@ -1,23 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { ARCHETYPE_NAMES_LIST } from '@/lib/archetypes';
+import { ARCHETYPES, ARCHETYPE_NAMES_LIST } from '@/lib/archetypes';
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
 export interface AnalyzeRequest {
-  action?: 'generate-offer';
+  action?: 'generate-offer' | 'suggest-archetype' | 'generate-hypotheses';
+  // Для generate-hypotheses: выбранный архетип
+  selectedArchetype?: { id: string; label: string };
   // Legacy format (ArchetypeAnalyzer)
   productDescription?: string;
   targetAudience?: string;
   brandValues?: string;
-  // New brief format (NewProject)
+  // Brief format (NewProject)
   product?: string;
   price?: string;
   audience?: string;
   goal?: string;
   utp?: string;
+  offer?: string;
   platforms?: string[];
   context?: string;
 }
@@ -144,6 +147,124 @@ ${lines.join('\n')}
       const offerJsonMatch = offerContent.text.match(/\{[\s\S]*\}/);
       if (!offerJsonMatch) throw new Error('No JSON in Claude response');
       return NextResponse.json(JSON.parse(offerJsonMatch[0]) as OfferResponse);
+    }
+
+    // ── suggest-archetype: только определение архетипа, без гипотез ──────
+    if (body.action === 'suggest-archetype') {
+      if (!productDesc || !audience) {
+        return NextResponse.json(
+          { error: 'product and audience are required' },
+          { status: 400 }
+        );
+      }
+
+      const lines: string[] = [`Продукт/бренд: ${productDesc}`];
+      if (body.price)             lines.push(`Цена: ${body.price}`);
+      lines.push(`Целевая аудитория: ${audience}`);
+      if (body.goal)              lines.push(`Цель рекламы: ${body.goal}`);
+      if (body.utp)               lines.push(`УТП: ${body.utp}`);
+      if (body.platforms?.length) lines.push(`Платформы: ${body.platforms.join(', ')}`);
+      if (body.context)           lines.push(`Контекст: ${body.context}`);
+
+      const suggestMsg = await client.messages.create({
+        model: 'claude-opus-4-6',
+        max_tokens: 800,
+        system: `Ты — эксперт по бренд-стратегии и теории архетипов рекламных баннеров.
+
+26 архетипов: ${ARCHETYPE_NAMES_LIST}.
+
+Проанализируй бриф. Определи 3 наиболее подходящих архетипа с процентом соответствия.
+НЕ генерируй гипотезы — только анализ архетипов.
+
+Верни ТОЛЬКО валидный JSON без markdown и пояснений:
+{
+  "archetypes": [{"name":"id архетипа","description":"как проявляется","matchScore":85,"keywords":["тег1","тег2"]}],
+  "primaryArchetype": "id основного архетипа",
+  "positioning": "Краткое позиционирование 1–2 предложения",
+  "hypotheses": [],
+  "newHypotheses": []
+}`,
+        messages: [{ role: 'user', content: lines.join('\n') }],
+      });
+
+      const suggestContent = suggestMsg.content[0];
+      if (suggestContent.type !== 'text') throw new Error('Unexpected Claude response');
+      const suggestMatch = suggestContent.text.match(/\{[\s\S]*\}/);
+      if (!suggestMatch) throw new Error('No JSON in Claude response');
+      return NextResponse.json(JSON.parse(suggestMatch[0]) as AnalyzeResponse);
+    }
+
+    // ── generate-hypotheses: 5 гипотез строго под выбранный архетип ──────
+    if (body.action === 'generate-hypotheses') {
+      if (!body.selectedArchetype?.id) {
+        return NextResponse.json(
+          { error: 'selectedArchetype is required' },
+          { status: 400 }
+        );
+      }
+
+      const archDef = ARCHETYPES.find(a => a.id === body.selectedArchetype!.id);
+      const archLabel = archDef?.label ?? body.selectedArchetype.label;
+      const archFormula = archDef?.formula ?? '';
+      const archTags = archDef?.tags?.join(', ') ?? '';
+      const archAudience = archDef?.audience ?? '';
+      const archStyle = archDef?.textRules?.style ?? 'bold';
+
+      const briefLines: string[] = [];
+      if (body.product)           briefLines.push(`Продукт: ${body.product}`);
+      if (body.price)             briefLines.push(`Цена/сегмент: ${body.price}`);
+      if (body.audience)          briefLines.push(`Аудитория: ${body.audience}`);
+      if (body.goal)              briefLines.push(`Цель рекламы: ${body.goal}`);
+      if (body.utp)               briefLines.push(`УТП: ${body.utp}`);
+      if (body.offer)             briefLines.push(`Оффер: ${body.offer}`);
+      if (body.platforms?.length) briefLines.push(`Платформы: ${body.platforms.join(', ')}`);
+      if (body.context)           briefLines.push(`Контекст: ${body.context}`);
+
+      const hypoMsg = await client.messages.create({
+        model: 'claude-opus-4-6',
+        max_tokens: 2000,
+        system: `Ты — эксперт по рекламным коммуникациям и маркетинговым баннерам.
+
+ВЫБРАННЫЙ АРХЕТИП: ${archLabel} (id: ${body.selectedArchetype.id})
+ФОРМУЛА АРХЕТИПА: ${archFormula}
+ГОЛОС И СТИЛЬ: ${archStyle}
+ТЕГИ АРХЕТИПА: ${archTags}
+ТИПИЧНАЯ АУДИТОРИЯ АРХЕТИПА: ${archAudience}
+
+ЗАДАЧА: Сгенерировать РОВНО 5 уникальных маркетинговых гипотез для рекламных баннеров.
+
+ЖЁСТКИЕ ТРЕБОВАНИЯ — каждая из 5 гипотез ОБЯЗАНА:
+1. Явно воплощать стиль, логику и ценности архетипа "${archLabel}"
+2. Визуально соответствовать формуле архетипа: "${archFormula}"
+3. Использовать голос и тон "${archStyle}"
+4. Упоминать или использовать паттерны архетипа: ${archTags}
+5. Быть уникальной — каждая под разным углом, но в рамках ОДНОГО архетипа
+
+Верни ТОЛЬКО валидный JSON без markdown:
+{
+  "newHypotheses": [
+    {
+      "idea": "Идея кампании — явно отражает архетип ${archLabel}",
+      "visual": "Визуал строго по формуле: ${archFormula}",
+      "headline": "Заголовок в стиле ${archStyle}",
+      "cta": "Призыв к действию",
+      "hook": "Первая фраза-крючок"
+    }
+  ]
+}`,
+        messages: [{
+          role: 'user',
+          content: `Бриф продукта:\n${briefLines.join('\n')}\n\nСгенерируй 5 гипотез строго под архетип "${archLabel}".`,
+        }],
+      });
+
+      const hypoContent = hypoMsg.content[0];
+      if (hypoContent.type !== 'text') throw new Error('Unexpected Claude response');
+      const hypoMatch = hypoContent.text.match(/\{[\s\S]*\}/);
+      if (!hypoMatch) throw new Error('No JSON in Claude response');
+      const hypoResult = JSON.parse(hypoMatch[0]);
+      if (!Array.isArray(hypoResult.newHypotheses)) hypoResult.newHypotheses = [];
+      return NextResponse.json({ newHypotheses: hypoResult.newHypotheses });
     }
 
     // ── main analyze action ────────────────────────────────────────────────
