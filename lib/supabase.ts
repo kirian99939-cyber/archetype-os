@@ -40,7 +40,7 @@ export async function getCredits(userId: string): Promise<number> {
  * Возвращает true если списание прошло успешно, false если кредитов нет или ошибка.
  */
 export async function spendCredit(userId: string): Promise<boolean> {
-  // Читаем текущий баланс
+  // Атомарно: читаем текущий баланс и списываем с optimistic lock
   const { data, error } = await supabaseAdmin
     .from('users')
     .select('credits')
@@ -49,15 +49,17 @@ export async function spendCredit(userId: string): Promise<boolean> {
 
   if (error || !data || data.credits <= 0) return false;
 
-  const { error: updateError } = await supabaseAdmin
+  // Optimistic lock: обновляем ТОЛЬКО если credits не изменился с момента чтения
+  const { data: updated, error: updateError } = await supabaseAdmin
     .from('users')
     .update({ credits: data.credits - 1 })
-    .eq('id', userId);
+    .eq('id', userId)
+    .eq('credits', data.credits)
+    .select('credits')
+    .single();
 
-  if (updateError) {
-    console.error('[Supabase] spendCredit error:', updateError);
-    return false;
-  }
+  // Если кто-то параллельно уже списал — .eq('credits', data.credits) не найдёт строку
+  if (updateError || !updated) return false;
   return true;
 }
 
