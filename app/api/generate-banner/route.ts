@@ -143,11 +143,32 @@ function buildImagePrompt(req: GenerateBannerRequest, bannerText: BannerText | n
     .join(' ');
 }
 
+const SUPPORTED_RATIOS = ['1:1', '4:5', '9:16', '16:9', '3:4', '4:3'];
+
 function getAspectRatio(width?: number, height?: number): string {
   if (!width || !height) return '16:9';
+
+  // Вычисляем точное соотношение через GCD
   const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
   const d = gcd(width, height);
-  return `${width / d}:${height / d}`;
+  const exact = `${width / d}:${height / d}`;
+
+  // Если точное соотношение поддерживается — используем
+  if (SUPPORTED_RATIOS.includes(exact)) return exact;
+
+  // Иначе находим ближайшее поддерживаемое по реальной пропорции
+  const target = width / height;
+  let best = SUPPORTED_RATIOS[0];
+  let bestDiff = Infinity;
+  for (const ratio of SUPPORTED_RATIOS) {
+    const [w, h] = ratio.split(':').map(Number);
+    const diff = Math.abs(w / h - target);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = ratio;
+    }
+  }
+  return best;
 }
 
 export async function POST(req: NextRequest) {
