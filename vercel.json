@@ -9,6 +9,9 @@
     },
     "app/api/analyze/route.ts": {
       "maxDuration": 120
+    },
+    "app/api/resize-banner/route.ts": {
+      "maxDuration": 60
     }
   }
 }
