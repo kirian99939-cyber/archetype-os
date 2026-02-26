@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter, Unbounded, DM_Sans } from 'next/font/google';
 import AuthProvider from '@/components/AuthProvider';
+import ProdamusScript from '@/components/ProdamusScript';
 import './globals.css';
 
 const inter = Inter({
@@ -40,6 +41,7 @@ export default function RootLayout({
   return (
     <html lang="ru" className={`${inter.variable} ${unbounded.variable} ${dmSans.variable}`}>
       <body className="min-h-screen antialiased">
+        <ProdamusScript />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
