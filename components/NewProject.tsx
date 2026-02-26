@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useSession } from 'next-auth/react';
-import type { AnalyzeResponse, NewHypothesis } from '@/app/api/analyze/route';
+import type { AnalyzeResponse, NewHypothesis, RecommendV2Response, HybridArchetype } from '@/app/api/analyze/route';
 import { ARCHETYPES } from '@/lib/archetypes';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -168,6 +168,8 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
   const [selectedArchetypes, setSelectedArchetypes] = useState<{ id: string; rank: number }[]>([]);
   // analyzeResult используется только для отображения AI-рекомендации архетипа на шаге 2
   const [analyzeResult, setAnalyzeResult]         = useState<AnalyzeResponse | null>(null);
+  const [recommendV2, setRecommendV2]             = useState<RecommendV2Response | null>(null);
+  const [selectedHybrids, setSelectedHybrids]     = useState<HybridArchetype[]>([]);
   const [analyzeLoading, setAnalyzeLoading]       = useState(false);
   const [analyzeError, setAnalyzeError]           = useState<string | null>(null);
 
@@ -429,7 +431,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action:    'suggest-archetype',
+          action:    'recommend-archetypes-v2',
           product:   brief.product,
           price:     brief.price,
           audience:  brief.audience,
@@ -443,17 +445,33 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
         const err = await res.json().catch(() => ({ error: 'Неизвестная ошибка' }));
         throw new Error(err.error || `HTTP ${res.status}`);
       }
-      const data: AnalyzeResponse = await res.json();
-      setAnalyzeResult(data);
-      // Автовыбираем рекомендованный архетип если ещё не выбран
-      if (data.archetypes && selectedArchetypes.length === 0) {
-        const top3 = data.archetypes.slice(0, 3).map((a: any, i: number) => ({
-          id: a.name,
+      const data: RecommendV2Response = await res.json();
+      setRecommendV2(data);
+      // Также сохраняем в старом формате для совместимости
+      setAnalyzeResult({
+        archetypes: data.pureArchetypes.map(a => ({
+          name: a.id,
+          description: a.reason,
+          matchScore: a.matchScore,
+          keywords: [],
+        })),
+        hypotheses: [],
+        newHypotheses: [],
+        positioning: data.positioning,
+        primaryArchetype: data.pureArchetypes[0]?.id ?? '',
+      });
+      // Автовыбираем 3 чистых архетипа
+      if (selectedArchetypes.length === 0) {
+        const top3 = data.pureArchetypes.slice(0, 3).map((a, i) => ({
+          id: a.id,
           rank: i + 1,
         }));
         setSelectedArchetypes(top3);
       }
-      // Гипотезы НЕ генерируются здесь
+      // Автовыбираем 2 гибрида
+      if (data.hybridArchetypes?.length > 0) {
+        setSelectedHybrids(data.hybridArchetypes.slice(0, 2));
+      }
     } catch (err) {
       setAnalyzeError(err instanceof Error ? err.message : 'Ошибка анализа');
     } finally {
@@ -467,36 +485,81 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
     setHypothesesLoading(true);
     setHypothesesError(null);
     try {
-      const selectedArchetypesPayload = archetypes.map(a => {
-        const def = ARCHETYPES.find(d => d.id === a.id);
-        return { id: a.id, label: def?.label ?? a.id, rank: a.rank };
-      });
+      const allHypotheses: NewHypothesis[] = [];
 
-      const res = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'generate-hypotheses',
-          selectedArchetypes: selectedArchetypesPayload,
-          product:   brief.product,
-          price:     brief.price,
-          audience:  brief.audience,
-          goal:      brief.goal,
-          utp:       brief.utp,
-          offer:     brief.offer,
-          platforms: brief.platforms,
-          context:   brief.context,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Ошибка генерации' }));
-        throw new Error(err.error || `HTTP ${res.status}`);
+      // 1. Чистые архетипы → generate-hypotheses (по 1 гипотезе)
+      if (archetypes.length > 0) {
+        const selectedArchetypesPayload = archetypes.map(a => {
+          const def = ARCHETYPES.find(d => d.id === a.id);
+          return { id: a.id, label: def?.label ?? a.id, rank: a.rank };
+        });
+
+        const res = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'generate-hypotheses',
+            selectedArchetypes: selectedArchetypesPayload,
+            product:   brief.product,
+            price:     brief.price,
+            audience:  brief.audience,
+            goal:      brief.goal,
+            utp:       brief.utp,
+            offer:     brief.offer,
+            platforms: brief.platforms,
+            context:   brief.context,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          allHypotheses.push(...(data.newHypotheses ?? []));
+        }
       }
-      const data = await res.json();
-      const generated = data.newHypotheses ?? [];
-      setHypotheses(generated);
-      lastHypothesesArchetype.current = archetypes.map(a => a.id).sort().join(',');
-      setSelectedHypotheses(new Set(Array.from({ length: Math.min(generated.length, 10) }, (_, i) => i)));
+
+      // 2. Гибриды → generate-hybrid-hypothesis (по 1 гипотезе)
+      for (const hybrid of selectedHybrids) {
+        const def1 = ARCHETYPES.find(d => d.id === hybrid.archetypes[0]);
+        const def2 = ARCHETYPES.find(d => d.id === hybrid.archetypes[1]);
+        try {
+          const hRes = await fetch('/api/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'generate-hybrid-hypothesis',
+              crossedArchetypes: [
+                { id: hybrid.archetypes[0], label: def1?.label ?? hybrid.archetypes[0] },
+                { id: hybrid.archetypes[1], label: def2?.label ?? hybrid.archetypes[1] },
+              ],
+              hybridName: hybrid.hybridName,
+              product:   brief.product,
+              price:     brief.price,
+              audience:  brief.audience,
+              goal:      brief.goal,
+              utp:       brief.utp,
+              offer:     brief.offer,
+              platforms: brief.platforms,
+              context:   brief.context,
+            }),
+          });
+          if (hRes.ok) {
+            const hData = await hRes.json();
+            const hypos = (hData.newHypotheses ?? []).map((h: NewHypothesis) => ({
+              ...h,
+              _isHybrid: true,
+              _hybridName: hybrid.hybridName,
+              _hybridIcons: `${def1?.icon ?? '?'} × ${def2?.icon ?? '?'}`,
+            }));
+            allHypotheses.push(...hypos);
+          }
+        } catch {
+          // Пропускаем ошибку конкретного гибрида
+        }
+      }
+
+      setHypotheses(allHypotheses);
+      const hybridsKey = selectedHybrids.map(h => h.archetypes.join('×')).sort().join(',');
+      lastHypothesesArchetype.current = archetypes.map(a => a.id).sort().join(',') + '|' + hybridsKey;
+      setSelectedHypotheses(new Set(Array.from({ length: Math.min(allHypotheses.length, 10) }, (_, i) => i)));
     } catch (err) {
       setHypothesesError(err instanceof Error ? err.message : 'Ошибка генерации гипотез');
     } finally {
@@ -505,15 +568,16 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
   };
 
   useEffect(() => {
-    // Сбрасываем гипотезы при любом изменении выбранных архетипов
-    const currentKey = selectedArchetypes.map(a => a.id).sort().join(',');
+    // Сбрасываем гипотезы при любом изменении выбранных архетипов или гибридов
+    const hybridsKey = selectedHybrids.map(h => h.archetypes.join('×')).sort().join(',');
+    const currentKey = selectedArchetypes.map(a => a.id).sort().join(',') + '|' + hybridsKey;
     if (lastHypothesesArchetype.current !== null && lastHypothesesArchetype.current !== currentKey) {
       setHypotheses([]);
       setSelectedHypotheses(new Set());
       setHypothesesError(null);
       lastHypothesesArchetype.current = null;
     }
-  }, [selectedArchetypes]);
+  }, [selectedArchetypes, selectedHybrids]);
 
   // При входе на шаг 3 — генерируем гипотезы если ещё нет
   useEffect(() => {
@@ -1367,27 +1431,98 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
               </div>
             )}
 
-            {analyzeResult && (
-              <div
-                className="rounded-xl p-4 flex flex-col sm:flex-row sm:items-start gap-4"
-                style={{ background: ACCENT_BG, border: `1px solid ${ACCENT_BORDER}` }}
-              >
-                <div className="flex-1">
+            {recommendV2 && (
+              <div className="space-y-4">
+                {/* Позиционирование */}
+                <div
+                  className="rounded-xl p-4"
+                  style={{ background: ACCENT_BG, border: `1px solid ${ACCENT_BORDER}` }}
+                >
                   <div className="flex items-center gap-2 mb-1.5">
                     <span style={{ color: ACCENT }}>✦</span>
                     <span className="text-xs uppercase tracking-wide" style={{ color: 'rgba(255,255,255,0.45)' }}>AI рекомендует</span>
-                    <span className="font-bold text-sm" style={{ color: ACCENT }}>{analyzeResult.primaryArchetype}</span>
                   </div>
-                  <p className="text-white/55 text-sm leading-relaxed">{analyzeResult.positioning}</p>
+                  <p className="text-white/55 text-sm leading-relaxed">{recommendV2.positioning}</p>
                 </div>
-                <div className="flex flex-wrap gap-2 shrink-0">
-                  {analyzeResult.archetypes.slice(0, 3).map(a => (
-                    <div key={a.name} className="text-center">
-                      <div className="text-xs font-semibold" style={{ color: ACCENT }}>{a.matchScore}%</div>
-                      <div className="text-[10px] text-white/40">{a.name}</div>
+
+                {/* Чистые архетипы */}
+                <div>
+                  <h4 className="text-white/40 text-[10px] uppercase tracking-widest font-semibold mb-2">Чистые архетипы</h4>
+                  <div className="grid grid-cols-3 gap-3">
+                    {recommendV2.pureArchetypes.slice(0, 3).map(a => {
+                      const def = ARCHETYPES.find(d => d.id === a.id);
+                      const isSelected = selectedArchetypes.some(s => s.id === a.id);
+                      return (
+                        <button
+                          key={a.id}
+                          onClick={() => toggleArchetype(a.id)}
+                          className="rounded-xl p-3 text-left transition-all"
+                          style={{
+                            background: isSelected ? ACCENT_BG : 'rgba(255,255,255,0.04)',
+                            border: `1px solid ${isSelected ? ACCENT : 'rgba(255,255,255,0.08)'}`,
+                          }}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-lg">{def?.icon ?? '?'}</span>
+                            <span className="text-xs font-bold" style={{ color: ACCENT }}>{a.matchScore}%</span>
+                          </div>
+                          <div className="text-xs font-semibold text-white mb-0.5">{def?.label ?? a.id}</div>
+                          <p className="text-[10px] text-white/40 leading-tight">{a.reason}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Гибриды */}
+                {recommendV2.hybridArchetypes.length > 0 && (
+                  <div>
+                    <h4 className="text-white/40 text-[10px] uppercase tracking-widest font-semibold mb-2">🧬 Гибриды</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {recommendV2.hybridArchetypes.slice(0, 2).map((h, hi) => {
+                        const def1 = ARCHETYPES.find(d => d.id === h.archetypes[0]);
+                        const def2 = ARCHETYPES.find(d => d.id === h.archetypes[1]);
+                        const isSelected = selectedHybrids.some(
+                          sh => sh.archetypes[0] === h.archetypes[0] && sh.archetypes[1] === h.archetypes[1]
+                        );
+                        return (
+                          <button
+                            key={hi}
+                            onClick={() => {
+                              setSelectedHybrids(prev => {
+                                const exists = prev.some(
+                                  sh => sh.archetypes[0] === h.archetypes[0] && sh.archetypes[1] === h.archetypes[1]
+                                );
+                                return exists
+                                  ? prev.filter(sh => !(sh.archetypes[0] === h.archetypes[0] && sh.archetypes[1] === h.archetypes[1]))
+                                  : [...prev, h];
+                              });
+                            }}
+                            className="rounded-xl p-4 text-left transition-all"
+                            style={{
+                              background: isSelected ? 'rgba(168,85,247,0.1)' : 'rgba(255,255,255,0.04)',
+                              border: isSelected
+                                ? '1px solid rgba(168,85,247,0.4)'
+                                : '1px solid rgba(255,255,255,0.08)',
+                            }}
+                          >
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-sm">🧬</span>
+                              <span className="text-lg">{def1?.icon ?? '?'}</span>
+                              <span className="text-white/30 text-xs">×</span>
+                              <span className="text-lg">{def2?.icon ?? '?'}</span>
+                            </div>
+                            <div className="text-xs font-bold mb-1" style={{ color: isSelected ? '#A855F7' : 'rgba(255,255,255,0.9)' }}>
+                              {h.hybridName}
+                            </div>
+                            <p className="text-[10px] text-white/50 leading-tight mb-1">{h.reason}</p>
+                            <p className="text-[10px] text-white/30 leading-tight italic">{h.visualHint}</p>
+                          </button>
+                        );
+                      })}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1532,8 +1667,12 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
                     onClick={() => toggleHypothesis(i)}
                     className="glass-card p-5 flex flex-col gap-4 text-left transition-all"
                     style={{
-                      border: `1px solid ${isSelected ? ACCENT : 'rgba(255,255,255,0.08)'}`,
-                      background: isSelected ? ACCENT_BG : undefined,
+                      border: (h as any)._isHybrid
+                        ? `1px solid ${isSelected ? '#A855F7' : 'rgba(168,85,247,0.3)'}`
+                        : `1px solid ${isSelected ? ACCENT : 'rgba(255,255,255,0.08)'}`,
+                      background: (h as any)._isHybrid
+                        ? (isSelected ? 'rgba(168,85,247,0.12)' : 'rgba(168,85,247,0.05)')
+                        : (isSelected ? ACCENT_BG : undefined),
                     }}
                   >
                     {/* Header row: number badge + checkbox */}
@@ -1541,15 +1680,22 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
                       <div className="flex items-center gap-1.5">
                         <div
                           className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
-                          style={{ background: isSelected ? ACCENT : 'rgba(255,255,255,0.12)', color: isSelected ? '#0A0A0A' : 'rgba(255,255,255,0.5)' }}
+                          style={{
+                            background: (h as any)._isHybrid
+                              ? (isSelected ? '#A855F7' : 'rgba(168,85,247,0.25)')
+                              : (isSelected ? ACCENT : 'rgba(255,255,255,0.12)'),
+                            color: isSelected ? '#0A0A0A' : ((h as any)._isHybrid ? '#A855F7' : 'rgba(255,255,255,0.5)'),
+                          }}
                         >
                           {i + 1}
                         </div>
-                        {(h as any).priority && (
+                        {(h as any)._isHybrid ? (
+                          <span className="text-sm">🧬</span>
+                        ) : (h as any).priority ? (
                           <span className="text-sm">
                             {(h as any).priority === 'gold' ? '🏆' : (h as any).priority === 'green' ? '🟢' : (h as any).priority === 'yellow' ? '🟡' : '◈'}
                           </span>
-                        )}
+                        ) : null}
                       </div>
                       <div
                         className="w-5 h-5 rounded flex items-center justify-center border-2 transition-all shrink-0"
@@ -1567,16 +1713,29 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
 
                     {(h as any).archetypeLabel && (
                       <div>
-                        <span
-                          className="text-[10px] font-medium px-2 py-0.5 rounded-full"
-                          style={{
-                            background: getRankStyle((h as any).rank ?? 99).bg,
-                            color: getRankStyle((h as any).rank ?? 99).color,
-                            border: `1px solid ${getRankStyle((h as any).rank ?? 99).border}`,
-                          }}
-                        >
-                          {getRankStyle((h as any).rank ?? 99).icon} {(h as any).archetypeLabel}
-                        </span>
+                        {(h as any)._isHybrid ? (
+                          <span
+                            className="text-[10px] font-medium px-2 py-0.5 rounded-full"
+                            style={{
+                              background: 'rgba(168,85,247,0.15)',
+                              color: '#A855F7',
+                              border: '1px solid rgba(168,85,247,0.3)',
+                            }}
+                          >
+                            🧬 {(h as any)._hybridIcons} {(h as any)._hybridName || (h as any).archetypeLabel}
+                          </span>
+                        ) : (
+                          <span
+                            className="text-[10px] font-medium px-2 py-0.5 rounded-full"
+                            style={{
+                              background: getRankStyle((h as any).rank ?? 99).bg,
+                              color: getRankStyle((h as any).rank ?? 99).color,
+                              border: `1px solid ${getRankStyle((h as any).rank ?? 99).border}`,
+                            }}
+                          >
+                            {getRankStyle((h as any).rank ?? 99).icon} {(h as any).archetypeLabel}
+                          </span>
+                        )}
                       </div>
                     )}
 

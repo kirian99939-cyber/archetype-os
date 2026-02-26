@@ -36,10 +36,13 @@ function extractJSON(text: string): Record<string, unknown> {
 }
 
 export interface AnalyzeRequest {
-  action?: 'generate-offer' | 'suggest-archetype' | 'generate-hypotheses';
+  action?: 'generate-offer' | 'suggest-archetype' | 'generate-hypotheses' | 'recommend-archetypes-v2' | 'generate-hybrid-hypothesis';
   // Для generate-hypotheses: выбранный архетип
   selectedArchetype?: { id: string; label: string };
   selectedArchetypes?: { id: string; label: string; rank: number }[];
+  // Для generate-hybrid-hypothesis: скрещиваемые архетипы
+  crossedArchetypes?: { id: string; label: string }[];
+  hybridName?: string;
   // Legacy format (ArchetypeAnalyzer)
   productDescription?: string;
   targetAudience?: string;
@@ -83,6 +86,19 @@ export interface NewHypothesis {
   archetypeLabel: string;
   rank: number;
   priority: 'gold' | 'green' | 'yellow' | 'default';
+}
+
+export interface HybridArchetype {
+  archetypes: [string, string];
+  hybridName: string;
+  reason: string;
+  visualHint: string;
+}
+
+export interface RecommendV2Response {
+  pureArchetypes: { id: string; reason: string; matchScore: number }[];
+  hybridArchetypes: HybridArchetype[];
+  positioning: string;
 }
 
 export interface AnalyzeResponse {
@@ -233,6 +249,144 @@ ${lines.join('\n')}
       const suggestContent = suggestMsg.content[0];
       if (suggestContent.type !== 'text') throw new Error('Unexpected Claude response');
       return NextResponse.json(extractJSON(suggestContent.text) as unknown as AnalyzeResponse);
+    }
+
+    // ── recommend-archetypes-v2: 3 чистых + 2 гибрида ─────────────────
+    if (body.action === 'recommend-archetypes-v2') {
+      if (!productDesc || !audience) {
+        return NextResponse.json(
+          { error: 'product and audience are required' },
+          { status: 400 }
+        );
+      }
+
+      const lines: string[] = [`Продукт/бренд: ${productDesc}`];
+      if (body.price)             lines.push(`Цена: ${body.price}`);
+      lines.push(`Целевая аудитория: ${audience}`);
+      if (body.goal)              lines.push(`Цель рекламы: ${body.goal}`);
+      if (body.utp)               lines.push(`УТП: ${body.utp}`);
+      if (body.platforms?.length) lines.push(`Платформы: ${body.platforms.join(', ')}`);
+      if (body.context)           lines.push(`Контекст: ${body.context}`);
+
+      const v2Msg = await client.messages.create({
+        model: 'claude-opus-4-6',
+        max_tokens: 1200,
+        system: `Ты — креативный стратег по рекламным баннерам.
+
+26 архетипов (используй ТОЛЬКО id из этого списка): ${ARCHETYPE_NAMES_LIST}.
+
+Проанализируй бриф и порекомендуй 5 архетипов:
+
+1. ТРИ чистых архетипа из списка — наиболее подходящих для продукта и аудитории.
+   Для каждого укажи matchScore (0-100) и объясни ПОЧЕМУ он подходит (1 предложение).
+
+2. ДВА гибрида — уникальные скрещивания из доступных архетипов.
+   Для каждого:
+   - archetypes: массив из РОВНО двух id архетипов
+   - hybridName: яркое короткое название (2-3 слова на русском)
+   - reason: почему эта пара сработает для данного брифа (1 предложение)
+   - visualHint: как будет выглядеть баннер в этом гибриде (1 предложение)
+
+Правила гибридов:
+- Скрещивай архетипы которые ДОПОЛНЯЮТ друг друга, а не дублируют
+- Один из гибридов может включать чистый архетип из тройки выше
+- Гибрид — это СИНТЕЗ, а не чередование
+
+Верни ТОЛЬКО валидный JSON без markdown:
+{
+  "pureArchetypes": [
+    {"id": "точный_id", "reason": "почему подходит", "matchScore": 85}
+  ],
+  "hybridArchetypes": [
+    {"archetypes": ["id1", "id2"], "hybridName": "Название", "reason": "почему сработает", "visualHint": "описание визуала"}
+  ],
+  "positioning": "Краткое позиционирование 1-2 предложения"
+}`,
+        messages: [{ role: 'user', content: lines.join('\n') }],
+      });
+
+      const v2Content = v2Msg.content[0];
+      if (v2Content.type !== 'text') throw new Error('Unexpected Claude response');
+      return NextResponse.json(extractJSON(v2Content.text) as unknown as RecommendV2Response);
+    }
+
+    // ── generate-hybrid-hypothesis: гибридная гипотеза для скрещенных архетипов
+    if (body.action === 'generate-hybrid-hypothesis') {
+      if (!body.crossedArchetypes || body.crossedArchetypes.length < 2) {
+        return NextResponse.json(
+          { error: 'crossedArchetypes (2 items) is required' },
+          { status: 400 }
+        );
+      }
+
+      const [arch1, arch2] = body.crossedArchetypes;
+      const def1 = ARCHETYPES.find(a => a.id === arch1.id);
+      const def2 = ARCHETYPES.find(a => a.id === arch2.id);
+
+      const briefLines: string[] = [];
+      if (body.product)           briefLines.push(`Продукт: ${body.product}`);
+      if (body.price)             briefLines.push(`Цена/сегмент: ${body.price}`);
+      if (body.audience)          briefLines.push(`Аудитория: ${body.audience}`);
+      if (body.goal)              briefLines.push(`Цель рекламы: ${body.goal}`);
+      if (body.utp)               briefLines.push(`УТП: ${body.utp}`);
+      if (body.offer)             briefLines.push(`Оффер: ${body.offer}`);
+      if (body.platforms?.length) briefLines.push(`Платформы: ${body.platforms.join(', ')}`);
+
+      const hybridMsg = await client.messages.create({
+        model: 'claude-opus-4-6',
+        max_tokens: 800,
+        system: `Ты — креативный стратег. Тебе даны два архетипа рекламного креатива.
+Твоя задача — создать ГИБРИДНУЮ гипотезу, которая объединяет сильные стороны обоих архетипов в единый креативный подход.
+
+Архетип 1: ${def1?.label ?? arch1.label} (${arch1.id})
+  Формула: ${def1?.formula ?? ''}
+  Стиль: ${def1?.textRules?.style ?? 'bold'}
+  Теги: ${def1?.tags?.join(', ') ?? ''}
+
+Архетип 2: ${def2?.label ?? arch2.label} (${arch2.id})
+  Формула: ${def2?.formula ?? ''}
+  Стиль: ${def2?.textRules?.style ?? 'bold'}
+  Теги: ${def2?.tags?.join(', ') ?? ''}
+
+${body.hybridName ? `Название гибрида: ${body.hybridName}` : ''}
+
+Создай ОДНУ гибридную гипотезу — именно СКРЕЩИВАНИЕ подходов, а не чередование.
+
+Верни ТОЛЬКО валидный JSON без markdown:
+{
+  "newHypotheses": [{
+    "idea": "Идея кампании — синтез двух архетипов",
+    "visual": "Описание визуала: что изображено, стиль, настроение, цвета",
+    "headline": "Заголовок рекламного объявления",
+    "cta": "Текст кнопки или призыв к действию",
+    "hook": "Первая фраза-крючок для захвата внимания"
+  }]
+}`,
+        messages: [{
+          role: 'user',
+          content: `Бриф:\n${briefLines.join('\n')}\n\nСгенерируй 1 гибридную гипотезу: скрещивание "${def1?.label ?? arch1.id}" × "${def2?.label ?? arch2.id}".`,
+        }],
+      });
+
+      const hybridContent = hybridMsg.content[0];
+      if (hybridContent.type !== 'text') throw new Error('Unexpected Claude response');
+
+      const hybridResult = extractJSON(hybridContent.text) as Record<string, unknown>;
+      const rawHypos = Array.isArray(hybridResult.newHypotheses) ? hybridResult.newHypotheses : [];
+
+      const hypos: NewHypothesis[] = rawHypos.slice(0, 1).map((h: any) => ({
+        idea: h.idea || '',
+        visual: h.visual || '',
+        headline: h.headline || '',
+        cta: h.cta || '',
+        hook: h.hook || '',
+        archetypeId: `${arch1.id}×${arch2.id}`,
+        archetypeLabel: body.hybridName || `${def1?.label ?? arch1.id} × ${def2?.label ?? arch2.id}`,
+        rank: 0,
+        priority: 'default' as const,
+      }));
+
+      return NextResponse.json({ newHypotheses: hypos });
     }
 
     // ── generate-hypotheses: 5 гипотез строго под выбранный архетип ──────
