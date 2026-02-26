@@ -269,8 +269,11 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify(nanoBananaPayload),
     });
 
+    console.log('[generate-banner] NanoBanana response status:', res.status);
+
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
+      console.log('[generate-banner] NanoBanana error body:', JSON.stringify(errorData).slice(0, 500));
       const errorMessage = errorData?.message ?? res.statusText;
       return NextResponse.json(
         { error: `NanoBanana API error (${res.status}): ${errorMessage}` },
@@ -279,7 +282,7 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await res.json();
-    console.log('[NanoBanana] create response:', JSON.stringify(data, null, 2));
+    console.log('[generate-banner] NanoBanana response body:', JSON.stringify(data).slice(0, 500));
 
     const taskId = data?.data?.taskId;
     if (!taskId) {

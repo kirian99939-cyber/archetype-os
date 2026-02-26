@@ -214,6 +214,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
   const [resumeMeta, setResumeMeta]                = useState<{ id: string; title: string } | null>(null);
   const [resumeLoading, setResumeLoading]          = useState(false);
   const projectIdRef                               = useRef<string | null>(null);
+  const pollTimeoutsRef                            = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
   // ── Helpers ──
 
@@ -557,67 +558,100 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
 
   // ── Step 4: banners ──
 
-  const pollBanner = (groupIndex: number, fmtKey: string, taskId: string, attempt = 1) => {
-    const MAX_POLL = 90;
-    const INTERVAL = 5000;
+  /** Поллинг одного баннера — возвращает Promise который резолвится когда баннер готов или ошибка */
+  const waitForBanner = (groupIndex: number, fmtKey: string, taskId: string): Promise<void> => {
+    return new Promise((resolve) => {
+      const MAX_POLL = 40; // 40 × 5с = 200 секунд макс
+      const INTERVAL = 5000;
+      let attempt = 0;
 
-    setTimeout(async () => {
-      try {
-        console.log(`[Banner polling] group=${groupIndex} key=${fmtKey} taskId=${taskId} attempt=${attempt}`);
-        const res = await fetch(`/api/banner-status?taskId=${taskId}`);
-        const data = await res.json();
-        console.log(`[Banner polling] group=${groupIndex} key=${fmtKey} attempt=${attempt} response:`, data);
+      const poll = async () => {
+        attempt++;
+        try {
+          const res = await fetch(`/api/banner-status?taskId=${taskId}`);
+          const data = await res.json();
 
-        if (!res.ok) {
-          setBannerGroups(prev => prev.map((g, gi) =>
-            gi !== groupIndex ? g : {
-              ...g,
-              banners: g.banners.map(b =>
-                b.key === fmtKey ? { ...b, loading: false, error: data.error || `HTTP ${res.status}` } : b
-              ),
-            }
-          ));
-          return;
-        }
-
-        if (data.ready && data.imageUrl) {
-          setBannerGroups(prev => prev.map((g, gi) =>
-            gi !== groupIndex ? g : {
-              ...g,
-              banners: g.banners.map(b =>
-                b.key === fmtKey ? { ...b, loading: false, imageUrl: data.imageUrl } : b
-              ),
-            }
-          ));
-          return;
-        }
-
-        if (attempt >= MAX_POLL) {
-          setBannerGroups(prev => prev.map((g, gi) =>
-            gi !== groupIndex ? g : {
-              ...g,
-              banners: g.banners.map(b =>
-                b.key === fmtKey ? { ...b, loading: false, error: 'Timeout: изображение не готово' } : b
-              ),
-            }
-          ));
-          return;
-        }
-
-        pollBanner(groupIndex, fmtKey, taskId, attempt + 1);
-      } catch (err) {
-        setBannerGroups(prev => prev.map((g, gi) =>
-          gi !== groupIndex ? g : {
-            ...g,
-            banners: g.banners.map(b =>
-              b.key === fmtKey
-                ? { ...b, loading: false, error: err instanceof Error ? err.message : 'Ошибка опроса' }
-                : b
-            ),
+          if (!res.ok) {
+            setBannerGroups(prev =>
+              prev.map((g, gi) =>
+                gi !== groupIndex
+                  ? g
+                  : {
+                      ...g,
+                      banners: g.banners.map(b =>
+                        b.key === fmtKey
+                          ? { ...b, loading: false, error: data.error || `HTTP ${res.status}` }
+                          : b
+                      ),
+                    }
+              )
+            );
+            resolve();
+            return;
           }
-        ));
-      }
-    }, INTERVAL);
+
+          if (data.ready && data.imageUrl) {
+            setBannerGroups(prev =>
+              prev.map((g, gi) =>
+                gi !== groupIndex
+                  ? g
+                  : {
+                      ...g,
+                      banners: g.banners.map(b =>
+                        b.key === fmtKey
+                          ? { ...b, loading: false, imageUrl: data.imageUrl }
+                          : b
+                      ),
+                    }
+              )
+            );
+            resolve();
+            return;
+          }
+
+          if (attempt >= MAX_POLL) {
+            setBannerGroups(prev =>
+              prev.map((g, gi) =>
+                gi !== groupIndex
+                  ? g
+                  : {
+                      ...g,
+                      banners: g.banners.map(b =>
+                        b.key === fmtKey
+                          ? { ...b, loading: false, error: 'Timeout: изображение не готово' }
+                          : b
+                      ),
+                    }
+              )
+            );
+            resolve();
+            return;
+          }
+
+          const timeoutId = setTimeout(poll, INTERVAL);
+          pollTimeoutsRef.current.add(timeoutId);
+        } catch {
+          setBannerGroups(prev =>
+            prev.map((g, gi) =>
+              gi !== groupIndex
+                ? g
+                : {
+                    ...g,
+                    banners: g.banners.map(b =>
+                      b.key === fmtKey
+                        ? { ...b, loading: false, error: 'Ошибка сети при поллинге' }
+                        : b
+                    ),
+                  }
+            )
+          );
+          resolve();
+        }
+      };
+
+      const timeoutId = setTimeout(poll, INTERVAL);
+      pollTimeoutsRef.current.add(timeoutId);
+    });
   };
 
   const handleGenerateBanners = async () => {
@@ -656,78 +690,117 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
       brief.goal     && `Цель: ${brief.goal}`,
     ].filter(Boolean).join('. ');
 
-    await Promise.allSettled(
-      selectedList.map(async (hypothesisIdx, groupIndex) => {
-        const hypothesis = hypotheses[hypothesisIdx];
-        const prompt = hypothesis
-          ? `${basePrompt}. Гипотеза: ${hypothesis.idea}. Визуал: ${hypothesis.visual}.`
-          : basePrompt;
+    // === ПОСЛЕДОВАТЕЛЬНАЯ генерация: одна гипотеза за раз, один формат за раз ===
+    const activeFormats = BANNER_FORMATS.filter(f => selectedFormats.has(f.key));
 
-        const activeFormats = BANNER_FORMATS.filter(f => selectedFormats.has(f.key));
-        await Promise.allSettled(
-          activeFormats.map(async (fmt, fmtIndex) => {
-            // Первый баннер пакета: первый формат первой гипотезы
-            const isFirstBanner = groupIndex === 0 && fmtIndex === 0;
-            // Resolve product image URLs from the brief visual selection
-            const briefImageUrls: string[] =
-              brief.visualMode === 'upload' && brief.imageUrls.length > 0
-                ? brief.imageUrls
-                : brief.visualMode === 'link' && brief.imageLink.trim()
-                ? [brief.imageLink.trim()]
-                : [];
-            try {
-              const res = await fetch('/api/generate-banner', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt, width: fmt.width, height: fmt.height, style: 'bold', archetype, offer: brief.offer || undefined, isFirstBanner, imageUrls: briefImageUrls.length > 0 ? briefImageUrls : undefined }),
-              });
+    for (let groupIndex = 0; groupIndex < selectedList.length; groupIndex++) {
+      const hypothesisIdx = selectedList[groupIndex];
+      const hypothesis = hypotheses[hypothesisIdx];
+      const prompt = hypothesis
+        ? `${basePrompt}. Гипотеза: ${hypothesis.idea}. Визуал: ${hypothesis.visual}.`
+        : basePrompt;
 
-              // Кредиты закончились
-              if (res.status === 403) {
-                setShowNoCreditsModal(true);
-                setBannerGroups(prev => prev.map((g, gi) =>
-                  gi !== groupIndex ? g : {
+      for (let fmtIndex = 0; fmtIndex < activeFormats.length; fmtIndex++) {
+        const fmt = activeFormats[fmtIndex];
+        const isFirstBanner = groupIndex === 0 && fmtIndex === 0;
+
+        const briefImageUrls: string[] =
+          brief.visualMode === 'upload' && brief.imageUrls.length > 0
+            ? brief.imageUrls
+            : brief.visualMode === 'link' && brief.imageLink.trim()
+            ? [brief.imageLink.trim()]
+            : [];
+
+        try {
+          const res = await fetch('/api/generate-banner', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prompt,
+              width: fmt.width,
+              height: fmt.height,
+              style: 'bold',
+              archetype,
+              offer: brief.offer || undefined,
+              isFirstBanner,
+              imageUrls: briefImageUrls.length > 0 ? briefImageUrls : undefined,
+            }),
+          });
+
+          if (res.status === 403) {
+            setShowNoCreditsModal(true);
+            setBannerGroups(prev =>
+              prev.map((g, gi) =>
+                gi !== groupIndex
+                  ? g
+                  : {
+                      ...g,
+                      banners: g.banners.map(b =>
+                        b.key === fmt.key
+                          ? { ...b, loading: false, error: 'Недостаточно кредитов' }
+                          : b
+                      ),
+                    }
+              )
+            );
+            return; // Прекращаем всю генерацию
+          }
+
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: 'Ошибка' }));
+            throw new Error(err.error || `HTTP ${res.status}`);
+          }
+
+          const data = await res.json();
+          const taskId = data.taskId;
+          if (!taskId) throw new Error('No taskId in NanoBanana API response');
+
+          setBannerGroups(prev =>
+            prev.map((g, gi) =>
+              gi !== groupIndex
+                ? g
+                : {
                     ...g,
                     banners: g.banners.map(b =>
-                      b.key === fmt.key ? { ...b, loading: false, error: 'Недостаточно кредитов' } : b
+                      b.key === fmt.key ? { ...b, taskId } : b
                     ),
                   }
-                ));
-                return;
-              }
+            )
+          );
 
-              if (!res.ok) {
-                const err = await res.json().catch(() => ({ error: 'Ошибка' }));
-                throw new Error(err.error || `HTTP ${res.status}`);
-              }
+          // Ждём готовности ЭТОГО баннера перед запуском следующего
+          await waitForBanner(groupIndex, fmt.key, taskId);
 
-              const data = await res.json();
-              const taskId = data.taskId;
-              if (!taskId) throw new Error('No taskId returned');
-
-              setBannerGroups(prev => prev.map((g, gi) =>
-                gi !== groupIndex ? g : {
-                  ...g,
-                  banners: g.banners.map(b => b.key === fmt.key ? { ...b, taskId } : b),
-                }
-              ));
-              pollBanner(groupIndex, fmt.key, taskId);
-            } catch (err) {
-              setBannerGroups(prev => prev.map((g, gi) =>
-                gi !== groupIndex ? g : {
-                  ...g,
-                  banners: g.banners.map(b =>
-                    b.key === fmt.key
-                      ? { ...b, loading: false, error: err instanceof Error ? err.message : 'Ошибка запуска' }
-                      : b
-                  ),
-                }
-              ));
-            }
-          })
-        );
-      })
-    );
+          // Пауза 2 секунды между запросами чтобы не перегружать API
+          if (fmtIndex < activeFormats.length - 1 || groupIndex < selectedList.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        } catch (err) {
+          setBannerGroups(prev =>
+            prev.map((g, gi) =>
+              gi !== groupIndex
+                ? g
+                : {
+                    ...g,
+                    banners: g.banners.map(b =>
+                      b.key === fmt.key
+                        ? {
+                            ...b,
+                            loading: false,
+                            error:
+                              err instanceof Error
+                                ? err.message
+                                : 'Ошибка запуска',
+                          }
+                        : b
+                    ),
+                  }
+            )
+          );
+          // Продолжаем со следующим форматом, не прерываем всё
+        }
+      }
+    }
   };
 
   const handleDownload = (banner: BannerItem) => {
@@ -1600,18 +1673,18 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
                       minHeight:   100,
                     }}
                   >
-                    {banner.loading && (
+                    {banner.loading && banner.taskId && (
                       <div className="flex flex-col items-center gap-2 p-4">
                         <div
                           className="w-8 h-8 rounded-full border-2 animate-spin"
                           style={{ borderColor: ACCENT, borderTopColor: 'transparent' }}
                         />
-                        <span
-                          className="text-white/40 text-xs text-center transition-opacity duration-500"
-                          key={loadingPhrase}
-                        >
-                          {LOADING_PHRASES[loadingPhrase]}
-                        </span>
+                        <span className="text-white/30 text-xs">Генерируется... (1-2 мин)</span>
+                      </div>
+                    )}
+                    {banner.loading && !banner.taskId && (
+                      <div className="flex flex-col items-center gap-2 p-4">
+                        <span className="text-white/20 text-xs">⏳ В очереди</span>
                       </div>
                     )}
                     {!banner.loading && !banner.imageUrl && !banner.error && (

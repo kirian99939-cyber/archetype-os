@@ -285,9 +285,9 @@ ${lines.join('\n')}
 ТЕГИ: ${archTags}
 АУДИТОРИЯ АРХЕТИПА: ${archAudience}
 
-Сгенерируй РОВНО 2 уникальные маркетинговые гипотезы для рекламных баннеров.
-Каждая гипотеза ОБЯЗАНА воплощать стиль и логику архетипа "${archLabel}".
-Первая гипотеза — самая сильная, вторая — альтернативный подход.
+Сгенерируй РОВНО 1 уникальную маркетинговую гипотезу для рекламного баннера.
+Гипотеза ОБЯЗАНА воплощать стиль и логику архетипа "${archLabel}".
+Выбери самый сильный и эффективный подход.
 
 Верни ТОЛЬКО валидный JSON без markdown:
 {
@@ -303,7 +303,7 @@ ${lines.join('\n')}
 }`,
           messages: [{
             role: 'user',
-            content: `Бриф:\n${briefLines.join('\n')}\n\nСгенерируй 2 гипотезы строго под архетип "${archLabel}".`,
+            content: `Бриф:\n${briefLines.join('\n')}\n\nСгенерируй 1 гипотезу строго под архетип "${archLabel}".`,
           }],
         });
 
@@ -314,7 +314,7 @@ ${lines.join('\n')}
           const hypoResult = extractJSON(hypoContent.text) as Record<string, unknown>;
           const rawHypotheses = Array.isArray(hypoResult.newHypotheses) ? hypoResult.newHypotheses : [];
 
-          rawHypotheses.slice(0, 2).forEach((h: any) => {
+          rawHypotheses.slice(0, 1).forEach((h: any) => {
             allHypotheses.push({
               idea: h.idea || '',
               visual: h.visual || '',
