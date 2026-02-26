@@ -113,6 +113,8 @@ interface BannerItem {
   imageUrl: string | null;
   loading:  boolean;
   error:    string | null;
+  refreshCount:     number;
+  previousVersions: string[];
 }
 
 interface BannerGroup {
@@ -360,7 +362,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
         }) => ({
           hypothesisIndex: g.hypothesisIndex,
           hypothesisTitle: g.hypothesisTitle,
-          banners: g.banners.map(b => ({ ...b, loading: false, error: b.error ?? null })),
+          banners: g.banners.map(b => ({ ...b, loading: false, error: b.error ?? null, refreshCount: b.refreshCount ?? 0, previousVersions: b.previousVersions ?? [] })),
         }));
         setBannerGroups(restored);
       }
@@ -677,7 +679,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
     const initialGroups: BannerGroup[] = selectedList.map(idx => ({
       hypothesisIndex: idx,
       hypothesisTitle: hypotheses[idx]?.idea || `Гипотеза ${idx + 1}`,
-      banners: BANNER_FORMATS.filter(f => selectedFormats.has(f.key)).map(f => ({ ...f, taskId: null, imageUrl: null, loading: true, error: null })),
+      banners: BANNER_FORMATS.filter(f => selectedFormats.has(f.key)).map(f => ({ ...f, taskId: null, imageUrl: null, loading: true, error: null, refreshCount: 0, previousVersions: [] })),
     }));
     setBannerGroups(initialGroups);
     setActiveBannerTab(0);
@@ -811,6 +813,136 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+  };
+
+  const MAX_REFRESHES_PER_BANNER = 3;
+
+  const handleRefreshBanner = async (groupIndex: number, fmtKey: string) => {
+    const group = bannerGroups[groupIndex];
+    if (!group) return;
+    const banner = group.banners.find(b => b.key === fmtKey);
+    if (!banner || banner.loading || banner.refreshCount >= MAX_REFRESHES_PER_BANNER) return;
+
+    const archetype = (selectedArchetypes[0]?.id || analyzeResult?.primaryArchetype || '').toLowerCase();
+    const hypothesis = hypotheses[group.hypothesisIndex];
+    const basePrompt = [
+      brief.product,
+      brief.utp      && `УТП: ${brief.utp}`,
+      brief.audience && `Аудитория: ${brief.audience}`,
+      brief.goal     && `Цель: ${brief.goal}`,
+    ].filter(Boolean).join('. ');
+    const prompt = hypothesis
+      ? `${basePrompt}. Гипотеза: ${hypothesis.idea}. Визуал: ${hypothesis.visual}.`
+      : basePrompt;
+
+    const briefImageUrls: string[] =
+      brief.visualMode === 'upload' && brief.imageUrls.length > 0
+        ? brief.imageUrls
+        : brief.visualMode === 'link' && brief.imageLink.trim()
+        ? [brief.imageLink.trim()]
+        : [];
+
+    // Сохраняем предыдущую версию и ставим loading
+    setBannerGroups(prev =>
+      prev.map((g, gi) =>
+        gi !== groupIndex
+          ? g
+          : {
+              ...g,
+              banners: g.banners.map(b =>
+                b.key === fmtKey
+                  ? {
+                      ...b,
+                      loading: true,
+                      error: null,
+                      taskId: null,
+                      previousVersions: b.imageUrl
+                        ? [...b.previousVersions, b.imageUrl]
+                        : b.previousVersions,
+                      refreshCount: b.refreshCount + 1,
+                    }
+                  : b
+              ),
+            }
+      )
+    );
+
+    try {
+      const res = await fetch('/api/generate-banner', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt,
+          width: banner.width,
+          height: banner.height,
+          style: 'bold',
+          archetype,
+          offer: brief.offer || undefined,
+          isFirstBanner: false, // рефреш не списывает кредит
+          imageUrls: briefImageUrls.length > 0 ? briefImageUrls : undefined,
+        }),
+      });
+
+      if (res.status === 403) {
+        setShowNoCreditsModal(true);
+        setBannerGroups(prev =>
+          prev.map((g, gi) =>
+            gi !== groupIndex ? g : {
+              ...g,
+              banners: g.banners.map(b =>
+                b.key === fmtKey ? { ...b, loading: false, error: 'Недостаточно кредитов' } : b
+              ),
+            }
+          )
+        );
+        return;
+      }
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Ошибка' }));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      const taskId = data.taskId;
+      if (!taskId) throw new Error('No taskId in NanoBanana API response');
+
+      setBannerGroups(prev =>
+        prev.map((g, gi) =>
+          gi !== groupIndex ? g : {
+            ...g,
+            banners: g.banners.map(b =>
+              b.key === fmtKey ? { ...b, taskId } : b
+            ),
+          }
+        )
+      );
+
+      await waitForBanner(groupIndex, fmtKey, taskId);
+    } catch (err) {
+      // При ошибке восстанавливаем предыдущую версию
+      setBannerGroups(prev =>
+        prev.map((g, gi) =>
+          gi !== groupIndex ? g : {
+            ...g,
+            banners: g.banners.map(b => {
+              if (b.key !== fmtKey) return b;
+              const prevUrl = b.previousVersions[b.previousVersions.length - 1] || null;
+              return {
+                ...b,
+                loading: false,
+                imageUrl: prevUrl ?? b.imageUrl,
+                error: err instanceof Error ? err.message : 'Ошибка обновления',
+                previousVersions: prevUrl
+                  ? b.previousVersions.slice(0, -1)
+                  : b.previousVersions,
+                refreshCount: b.refreshCount - 1, // откатываем счётчик
+              };
+            }),
+          }
+        )
+      );
+    }
   };
 
   const activeArchetype = selectedArchetypes.length > 0
@@ -1665,7 +1797,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
 
                   {/* Image area */}
                   <div
-                    className="rounded-xl overflow-hidden flex items-center justify-center"
+                    className="rounded-xl overflow-hidden relative flex items-center justify-center"
                     style={{
                       background:  'rgba(255,255,255,0.03)',
                       border:      '1px solid rgba(255,255,255,0.07)',
@@ -1673,7 +1805,30 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
                       minHeight:   100,
                     }}
                   >
-                    {banner.loading && banner.taskId && (
+                    {/* Изображение (полупрозрачное при рефреше) */}
+                    {banner.imageUrl && (
+                      <Image
+                        src={banner.imageUrl}
+                        alt={`${banner.label} banner`}
+                        width={banner.width}
+                        height={banner.height}
+                        className="w-full h-auto object-contain transition-opacity duration-300"
+                        style={{ opacity: banner.loading ? 0.3 : 1 }}
+                        unoptimized
+                      />
+                    )}
+                    {/* Overlay спиннер при рефреше поверх изображения */}
+                    {banner.loading && banner.imageUrl && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <div
+                          className="w-8 h-8 rounded-full border-2 animate-spin"
+                          style={{ borderColor: ACCENT, borderTopColor: 'transparent' }}
+                        />
+                        <span className="text-white/60 text-xs mt-2">Генерируем новый вариант...</span>
+                      </div>
+                    )}
+                    {/* Спиннер при первичной генерации (нет imageUrl) */}
+                    {banner.loading && !banner.imageUrl && banner.taskId && (
                       <div className="flex flex-col items-center gap-2 p-4">
                         <div
                           className="w-8 h-8 rounded-full border-2 animate-spin"
@@ -1682,7 +1837,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
                         <span className="text-white/30 text-xs">Генерируется... (1-2 мин)</span>
                       </div>
                     )}
-                    {banner.loading && !banner.taskId && (
+                    {banner.loading && !banner.imageUrl && !banner.taskId && (
                       <div className="flex flex-col items-center gap-2 p-4">
                         <span className="text-white/20 text-xs">⏳ В очереди</span>
                       </div>
@@ -1693,20 +1848,14 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
                         <p className="text-white/20 text-xs">Ожидание...</p>
                       </div>
                     )}
-                    {banner.error && (
+                    {banner.error && !banner.imageUrl && (
                       <p className="text-red-400 text-xs text-center p-3 leading-relaxed">{banner.error}</p>
                     )}
-                    {banner.imageUrl && (
-                      <Image
-                        src={banner.imageUrl}
-                        alt={`${banner.label} banner`}
-                        width={banner.width}
-                        height={banner.height}
-                        className="w-full h-auto object-contain"
-                        unoptimized
-                      />
-                    )}
                   </div>
+                  {/* Ошибка под изображением (если есть и imageUrl, и error — при рефреше) */}
+                  {banner.error && banner.imageUrl && (
+                    <p className="text-red-400 text-xs text-center leading-relaxed">{banner.error}</p>
+                  )}
 
                   {/* Actions */}
                   <div className="flex gap-2">
@@ -1721,6 +1870,24 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
                       }
                     >
                       ↓ Скачать
+                    </button>
+                    {/* Кнопка рефреша */}
+                    <button
+                      onClick={() => handleRefreshBanner(activeBannerTab, banner.key)}
+                      disabled={banner.loading || banner.refreshCount >= MAX_REFRESHES_PER_BANNER}
+                      title={
+                        banner.refreshCount >= MAX_REFRESHES_PER_BANNER
+                          ? `Лимит обновлений (${MAX_REFRESHES_PER_BANNER})`
+                          : 'Сгенерировать заново'
+                      }
+                      className="py-2 px-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-1"
+                      style={
+                        banner.loading || banner.refreshCount >= MAX_REFRESHES_PER_BANNER
+                          ? { background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.2)', cursor: 'not-allowed' }
+                          : { background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)' }
+                      }
+                    >
+                      🔄{banner.refreshCount > 0 && <span className="text-[10px]">{banner.refreshCount}/{MAX_REFRESHES_PER_BANNER}</span>}
                     </button>
                     {banner.imageUrl && (
                       <a
