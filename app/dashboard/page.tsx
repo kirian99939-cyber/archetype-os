@@ -213,6 +213,35 @@ export default function DashboardRoute() {
         </main>
       </div>
 
+      {/* ══════════ SUPPORT BUTTON ══════════ */}
+      <div className="fixed z-50 flex items-center" style={{ bottom: 24, right: 24 }}>
+        <div className="group relative flex items-center">
+          <span
+            className="pointer-events-none absolute right-full mr-3 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100"
+            style={{ background: 'rgba(0,0,0,0.8)' }}
+          >
+            Поддержка
+          </span>
+          <button
+            onClick={() => window.open('https://t.me/creatika_product_bot', '_blank')}
+            className="flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110"
+            style={{
+              width: 56,
+              height: 56,
+              background: '#C8FF00',
+              color: '#0A0A0A',
+              fontSize: 24,
+              boxShadow: '0 4px 20px rgba(200,255,0,0.3)',
+              cursor: 'pointer',
+              border: 'none',
+            }}
+            title="Поддержка"
+          >
+            💬
+          </button>
+        </div>
+      </div>
+
       {/* ══════════ MODAL: BANNERS GENERATING ══════════ */}
       {pendingNav && (
         <div

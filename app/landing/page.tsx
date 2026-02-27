@@ -518,10 +518,22 @@ export default function LandingPage() {
             </span>
           </div>
 
-          <div className="flex gap-6">
-            {['Конфиденциальность', 'Условия', 'Поддержка'].map((link) => (
-              <a key={link} href="#" className="nav-link text-sm no-underline">{link}</a>
-            ))}
+          <div className="flex items-center gap-0" style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>
+            <a href="/privacy" style={{ color: 'rgba(255,255,255,0.4)', textDecoration: 'none' }}
+              onMouseEnter={(e: React.MouseEvent<HTMLAnchorElement>) => { e.currentTarget.style.color = '#fff'; }}
+              onMouseLeave={(e: React.MouseEvent<HTMLAnchorElement>) => { e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; }}
+            >Политика конфиденциальности</a>
+            <span style={{ margin: '0 8px', opacity: 0.5 }}>&middot;</span>
+            <a href="/terms" style={{ color: 'rgba(255,255,255,0.4)', textDecoration: 'none' }}
+              onMouseEnter={(e: React.MouseEvent<HTMLAnchorElement>) => { e.currentTarget.style.color = '#fff'; }}
+              onMouseLeave={(e: React.MouseEvent<HTMLAnchorElement>) => { e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; }}
+            >Пользовательское соглашение</a>
+            <span style={{ margin: '0 8px', opacity: 0.5 }}>&middot;</span>
+            <a href="https://t.me/creatika_product_bot" target="_blank" rel="noopener noreferrer"
+              style={{ color: 'rgba(255,255,255,0.4)', textDecoration: 'none' }}
+              onMouseEnter={(e: React.MouseEvent<HTMLAnchorElement>) => { e.currentTarget.style.color = '#fff'; }}
+              onMouseLeave={(e: React.MouseEvent<HTMLAnchorElement>) => { e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; }}
+            >Поддержка</a>
           </div>
 
           <p className="text-xs" style={{ color: 'rgba(255,255,255,0.28)' }}>
