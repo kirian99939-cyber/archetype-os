@@ -14,6 +14,7 @@ import PricingSection from '@/components/PricingSection';
 import BannerLibraryPage from '@/components/BannerLibraryPage';
 import AdminPage from '@/components/AdminPage';
 import ChangelogModal, { hasUnseenChangelog } from '@/components/ChangelogModal';
+import KreatikaLogo from '@/components/KreatikaLogo';
 
 type Page =
   | 'dashboard'
@@ -117,12 +118,7 @@ export default function DashboardRoute() {
         style={{ width: 'var(--sidebar-width)' }}
       >
         <div className="px-4 py-5 border-b border-white/10">
-          <div className="flex items-center gap-2">
-            <span style={{ color: 'var(--accent)', fontSize: '1.1rem' }}>⚡</span>
-            <span className="text-white font-semibold text-sm leading-tight">
-              Креатика
-            </span>
-          </div>
+          <KreatikaLogo size={28} />
         </div>
 
         <div className="px-4 py-3 border-b border-white/10">

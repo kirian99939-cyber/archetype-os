@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter, Unbounded, DM_Sans } from 'next/font/google';
+import { Inter, Unbounded, DM_Sans, Sora } from 'next/font/google';
 import AuthProvider from '@/components/AuthProvider';
 import ProdamusScript from '@/components/ProdamusScript';
 import './globals.css';
@@ -22,6 +22,13 @@ const dmSans = DM_Sans({
   display: 'swap',
 });
 
+const sora = Sora({
+  subsets: ['latin', 'latin-ext'],
+  weight: ['400', '600', '700'],
+  variable: '--font-sora',
+  display: 'swap',
+});
+
 export const metadata: Metadata = {
   title: 'Креатика — AI-платформа для создания рекламных баннеров',
   description: 'Генерация рекламных баннеров на основе психологических архетипов. Создавайте эффективную рекламу с помощью AI.',
@@ -39,7 +46,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ru" className={`${inter.variable} ${unbounded.variable} ${dmSans.variable}`}>
+    <html lang="ru" className={`${inter.variable} ${unbounded.variable} ${dmSans.variable} ${sora.variable}`}>
       <body className="min-h-screen antialiased">
         <ProdamusScript />
         <AuthProvider>{children}</AuthProvider>

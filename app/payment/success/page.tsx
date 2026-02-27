@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import AnimatedLogo from '@/components/AnimatedLogo';
 
 const ACCENT = '#B5D334';
 
@@ -150,6 +151,10 @@ export default function PaymentSuccess() {
           >
             Автоматический переход через {countdown} сек...
           </p>
+
+          <div style={{ marginTop: 32, opacity: 0.4 }}>
+            <AnimatedLogo size={36} inline />
+          </div>
         </div>
       </div>
     </div>

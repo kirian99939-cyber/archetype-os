@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useSession } from 'next-auth/react';
 import type { AnalyzeResponse, NewHypothesis, RecommendV2Response, HybridArchetype } from '@/app/api/analyze/route';
 import { ARCHETYPES } from '@/lib/archetypes';
+import AnimatedLogo from '@/components/AnimatedLogo';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -1684,11 +1685,10 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
           </div>
 
           {hypothesesLoading ? (
-            <div className="glass-card p-12 text-center">
-              <div
-                className="w-10 h-10 rounded-full border-2 animate-spin mx-auto mb-4"
-                style={{ borderColor: ACCENT, borderTopColor: 'transparent' }}
-              />
+            <div className="glass-card p-12 text-center flex flex-col items-center">
+              <div className="mb-4">
+                <AnimatedLogo size={56} inline />
+              </div>
               <p className="text-white/60 text-sm mb-1">
                 Генерируем гипотезы под архетип&nbsp;
                 <span style={{ color: ACCENT }}>
@@ -2046,11 +2046,8 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
                     {/* Спиннер при первичной генерации (нет imageUrl) */}
                     {banner.loading && !banner.imageUrl && banner.taskId && (
                       <div className="flex flex-col items-center gap-2 p-4">
-                        <div
-                          className="w-8 h-8 rounded-full border-2 animate-spin"
-                          style={{ borderColor: ACCENT, borderTopColor: 'transparent' }}
-                        />
-                        <span className="text-white/30 text-xs">Генерируется... (1-2 мин)</span>
+                        <AnimatedLogo size={40} inline />
+                        <span className="text-white/30 text-xs mt-1">Генерируется... (1-2 мин)</span>
                       </div>
                     )}
                     {banner.loading && !banner.imageUrl && !banner.taskId && (

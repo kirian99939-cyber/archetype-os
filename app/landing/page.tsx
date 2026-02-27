@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { ARCHETYPES } from '@/lib/archetypes';
 import PricingSection from '@/components/PricingSection';
+import AnimatedLogo from '@/components/AnimatedLogo';
+import KreatikaLogo from '@/components/KreatikaLogo';
 
 const NAV_LINKS = [
   { label: 'Как работает', href: '#how-it-works' },
@@ -137,12 +139,7 @@ export default function LandingPage() {
         style={{ borderColor: 'var(--border)', background: 'rgba(10,10,10,0.88)', backdropFilter: 'blur(16px)' }}
       >
         <div className="flex items-center justify-between mx-auto px-6" style={{ maxWidth: 1160, height: 64 }}>
-          <div className="flex items-center gap-2.5">
-            <span style={{ color: 'var(--accent)', fontSize: '1.2rem' }}>⚡</span>
-            <span className="text-white font-bold text-sm leading-snug" style={{ fontFamily: 'var(--font-display)' }}>
-              Креатика
-            </span>
-          </div>
+          <KreatikaLogo size={28} />
 
           <div className="hidden md:flex items-center gap-7">
             {NAV_LINKS.map((link) => (
@@ -169,6 +166,10 @@ export default function LandingPage() {
         }} />
 
         <div className="relative mx-auto" style={{ maxWidth: 880, zIndex: 1 }}>
+          <div className="animate-fade-up flex justify-center mb-6">
+            <AnimatedLogo size={72} inline />
+          </div>
+
           <div className="animate-fade-up inline-flex items-center gap-2 border rounded-full mb-9 text-xs" style={{
             borderColor: 'rgba(200,255,0,0.3)',
             color: 'var(--accent)', padding: '6px 18px',
@@ -511,12 +512,7 @@ export default function LandingPage() {
       {/* ─────────────────────────── FOOTER ─────────────────────────── */}
       <footer className="border-t" style={{ borderColor: 'var(--border)', padding: '36px 24px' }}>
         <div className="mx-auto flex flex-wrap items-center justify-between gap-4" style={{ maxWidth: 1100 }}>
-          <div className="flex items-center gap-2.5">
-            <span style={{ color: 'var(--accent)', fontSize: '1.1rem' }}>⚡</span>
-            <span className="text-white font-bold text-sm" style={{ fontFamily: 'var(--font-display)' }}>
-              Креатика
-            </span>
-          </div>
+          <KreatikaLogo size={24} />
 
           <div className="flex items-center gap-0" style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>
             <a href="/privacy" style={{ color: 'rgba(255,255,255,0.4)', textDecoration: 'none' }}
