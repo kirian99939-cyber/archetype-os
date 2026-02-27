@@ -35,7 +35,7 @@ const STATS = [
 
 const FAQ_ITEMS = [
   {
-    q: 'Что такое Архетип-Протокол?',
+    q: 'Что такое Креатика?',
     a: 'Это AI-сервис, который генерирует рекламные баннеры на основе психологических архетипов. Вы описываете продукт и аудиторию — система подбирает архетип, формулирует гипотезы и создаёт готовые креативы в нескольких форматах за 2 минуты.',
   },
   {
@@ -140,7 +140,7 @@ export default function LandingPage() {
           <div className="flex items-center gap-2.5">
             <span style={{ color: 'var(--accent)', fontSize: '1.2rem' }}>⚡</span>
             <span className="text-white font-bold text-sm leading-snug" style={{ fontFamily: 'var(--font-display)' }}>
-              Архетип-<br />Протокол
+              Креатика
             </span>
           </div>
 
@@ -194,7 +194,7 @@ export default function LandingPage() {
             color: 'var(--text-muted)', lineHeight: 1.75,
             maxWidth: 580, marginBottom: 48,
           }}>
-            Архетип-Протокол анализирует бренд, подбирает психотип аудитории
+            Креатика анализирует бренд, подбирает психотип аудитории
             и генерирует рекламные баннеры, которые реально работают.
           </p>
 
@@ -304,7 +304,7 @@ export default function LandingPage() {
             Почему это выгодно
           </h2>
           <p className="text-sm mx-auto" style={{ color: 'var(--text-muted)', maxWidth: 480, lineHeight: 1.65 }}>
-            Сравните: классический подход vs Архетип-Протокол
+            Сравните: классический подход vs Креатика
           </p>
         </div>
 
@@ -514,7 +514,7 @@ export default function LandingPage() {
           <div className="flex items-center gap-2.5">
             <span style={{ color: 'var(--accent)', fontSize: '1.1rem' }}>⚡</span>
             <span className="text-white font-bold text-sm" style={{ fontFamily: 'var(--font-display)' }}>
-              Архетип-Протокол
+              Креатика
             </span>
           </div>
 
@@ -525,7 +525,7 @@ export default function LandingPage() {
           </div>
 
           <p className="text-xs" style={{ color: 'rgba(255,255,255,0.28)' }}>
-            © {new Date().getFullYear()} Архетип-Протокол
+            © {new Date().getFullYear()} Креатика
           </p>
         </div>
       </footer>

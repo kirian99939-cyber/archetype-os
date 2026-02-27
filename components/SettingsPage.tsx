@@ -266,7 +266,7 @@ export default function SettingsPage() {
 
       {/* Версия */}
       <p className="text-white/15 text-xs text-center pb-4">
-        Архетип-Протокол v1.0 · Powered by Claude & NanoBanana
+        Креатика v1.0 · Powered by Claude & NanoBanana
       </p>
     </div>
   );

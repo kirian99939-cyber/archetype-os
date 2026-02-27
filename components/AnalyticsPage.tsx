@@ -332,7 +332,7 @@ export default function AnalyticsPage() {
           <h3 className="text-white font-semibold mb-2">Аналитика рекламных кампаний</h3>
           <p className="text-white/35 text-sm leading-relaxed max-w-md mx-auto mb-4">
             Скоро — интеграция с рекламными кабинетами. Отслеживайте CTR, конверсии
-            и ROI ваших баннеров прямо в Архетип-Протокол.
+            и ROI ваших баннеров прямо в Креатике.
           </p>
           <span
             className="inline-block text-xs font-medium px-4 py-2 rounded-full"

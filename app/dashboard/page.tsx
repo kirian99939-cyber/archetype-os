@@ -109,7 +109,7 @@ export default function DashboardRoute() {
           <div className="flex items-center gap-2">
             <span style={{ color: 'var(--accent)', fontSize: '1.1rem' }}>⚡</span>
             <span className="text-white font-semibold text-sm leading-tight">
-              Архетип-<br />Протокол
+              Креатика
             </span>
           </div>
         </div>
