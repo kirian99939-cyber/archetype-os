@@ -8,6 +8,13 @@ import { ARCHETYPES } from '@/lib/archetypes';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+const TONE_OF_VOICE = [
+  { id: 'friendly', label: 'На «ты»', icon: '😊', desc: 'Дружелюбный, неформальный' },
+  { id: 'formal', label: 'На «вы»', icon: '🤝', desc: 'Профессиональный, уважительный' },
+  { id: 'provocative', label: 'Провокационный', icon: '🔥', desc: 'Дерзкий, вызывающий' },
+  { id: 'expert', label: 'Экспертный', icon: '🎯', desc: 'Авторитетный, с цифрами и фактами' },
+];
+
 const PLATFORMS = [
   'Instagram',
   'TikTok',
@@ -90,17 +97,18 @@ const LOADING_PHRASES = [
 type VisualMode = 'ai' | 'upload' | 'link';
 
 interface Brief {
-  product:    string;
-  price:      string;
-  audience:   string;
-  goal:       string;
-  utp:        string;
-  offer:      string;
-  platforms:  string[];
-  context:    string;
-  visualMode: VisualMode;
-  imageUrls:  string[];   // uploaded photo public URLs
-  imageLink:  string;     // manual link URL
+  product:      string;
+  price:        string;
+  audience:     string;
+  goal:         string;
+  utp:          string;
+  offer:        string;
+  toneOfVoice:  string;
+  platforms:    string[];
+  context:      string;
+  visualMode:   VisualMode;
+  imageUrls:    string[];   // uploaded photo public URLs
+  imageLink:    string;     // manual link URL
 }
 
 interface BannerItem {
@@ -153,7 +161,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
   const [brief, setBrief] = useState<Brief>({
-    product: '', price: '', audience: '', goal: '', utp: '', offer: '', platforms: [], context: '',
+    product: '', price: '', audience: '', goal: '', utp: '', offer: '', toneOfVoice: 'friendly', platforms: [], context: '',
     visualMode: 'ai', imageUrls: [], imageLink: '',
   });
 
@@ -437,6 +445,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
           audience:  brief.audience,
           goal:      brief.goal,
           utp:       brief.utp,
+          toneOfVoice: brief.toneOfVoice,
           platforms: brief.platforms,
           context:   brief.context,
         }),
@@ -506,6 +515,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
             goal:      brief.goal,
             utp:       brief.utp,
             offer:     brief.offer,
+            toneOfVoice: brief.toneOfVoice,
             platforms: brief.platforms,
             context:   brief.context,
           }),
@@ -537,6 +547,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
               goal:      brief.goal,
               utp:       brief.utp,
               offer:     brief.offer,
+              toneOfVoice: brief.toneOfVoice,
               platforms: brief.platforms,
               context:   brief.context,
             }),
@@ -791,6 +802,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
               style: 'bold',
               archetype,
               offer: brief.offer || undefined,
+              toneOfVoice: brief.toneOfVoice || undefined,
               isFirstBanner,
               imageUrls: imageUrlsToSend,
             }),
@@ -948,6 +960,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
           style: 'bold',
           archetype,
           offer: brief.offer || undefined,
+          toneOfVoice: brief.toneOfVoice || undefined,
           isFirstBanner: false, // рефреш не списывает кредит
           imageUrls: imageUrlsToSend,
         }),
@@ -1211,6 +1224,42 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
                 </div>
               )}
               <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 4 }}>Конкретное предложение для клиента прямо сейчас — скидка, бонус, подарок, пробный период</p>
+            </div>
+
+            {/* Tone of Voice */}
+            <div>
+              <label className="block text-white/50 text-xs font-medium mb-1.5">Tone of Voice</label>
+              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, marginBottom: 8 }}>Стиль общения с аудиторией</p>
+              <div className="flex flex-wrap gap-2">
+                {TONE_OF_VOICE.map(t => {
+                  const active = brief.toneOfVoice === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setBrief(p => ({ ...p, toneOfVoice: t.id }))}
+                      style={{
+                        padding: '8px 16px',
+                        borderRadius: 12,
+                        fontSize: 14,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        background: active ? 'rgba(200,255,0,0.1)' : 'rgba(255,255,255,0.06)',
+                        color: active ? '#C8FF00' : 'rgba(255,255,255,0.55)',
+                        border: `1px solid ${active ? '#C8FF00' : 'rgba(255,255,255,0.1)'}`,
+                        fontWeight: active ? 600 : 400,
+                      }}
+                    >
+                      {t.icon} {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {brief.toneOfVoice && (
+                <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, marginTop: 6 }}>
+                  {TONE_OF_VOICE.find(t => t.id === brief.toneOfVoice)?.desc}
+                </p>
+              )}
             </div>
 
             {/* Platforms chips */}

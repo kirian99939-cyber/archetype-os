@@ -13,6 +13,8 @@ export interface GenerateBannerRequest {
   offer?: string;
   /** URLs of product photos to use as the main visual (uploaded or linked) */
   imageUrls?: string[];
+  /** Tone of voice for text generation */
+  toneOfVoice?: string;
   /** true только для первого запроса в пакете — списывает 1 кредит */
   isFirstBanner?: boolean;
 }
@@ -37,6 +39,13 @@ const styleDescriptions: Record<TextRules['style'], string> = {
   scientific: 'точный, с конкретными фактами и цифрами',
 };
 
+const toneInstructions: Record<string, string> = {
+  friendly: 'Тон: дружелюбный, на «ты». Неформальный язык, как для друга.',
+  formal: 'Тон: профессиональный, на «вы». Уважительный, деловой стиль.',
+  provocative: 'Тон: провокационный, дерзкий. Вызывающие формулировки.',
+  expert: 'Тон: экспертный, авторитетный. Цифры, факты, конкретика.',
+};
+
 const levelDescriptions: Record<TextRules['level'], string> = {
   minimal: 'Только название бренда или слоган — 1–3 слова',
   medium: 'Заголовок 5–7 слов + короткий CTA 2–4 слова. Оффер не нужен.',
@@ -48,11 +57,16 @@ async function generateBannerText(
   archetype: string,
   textRules: TextRules,
   offer?: string,
+  toneOfVoice?: string,
 ): Promise<BannerText> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   const offerInstruction = offer
     ? `\nОффер клиента: "${offer}"\nАдаптируй этот оффер под стиль архетипа, НЕ меняя ключевой смысл и конкретные факты (числа, сроки, условия).`
+    : '';
+
+  const toneInstruction = toneOfVoice && toneInstructions[toneOfVoice]
+    ? `\n${toneInstructions[toneOfVoice]}`
     : '';
 
   const message = await client.messages.create({
@@ -65,7 +79,7 @@ async function generateBannerText(
 Бриф: ${brief}
 Архетип: ${archetype}
 Уровень текста: ${levelDescriptions[textRules.level]}
-Стиль текста: ${styleDescriptions[textRules.style]}${offerInstruction}
+Стиль текста: ${styleDescriptions[textRules.style]}${toneInstruction}${offerInstruction}
 
 Верни ТОЛЬКО валидный JSON без пояснений:
 {
@@ -261,7 +275,7 @@ export async function POST(req: NextRequest) {
       const archetypeDef = ARCHETYPES.find(a => a.id === body.archetype);
       if (archetypeDef?.textRules) {
         try {
-          bannerText = await generateBannerText(body.prompt, body.archetype, archetypeDef.textRules, body.offer);
+          bannerText = await generateBannerText(body.prompt, body.archetype, archetypeDef.textRules, body.offer, body.toneOfVoice);
           console.log('[Banner] Generated text:', bannerText);
         } catch (err) {
           console.warn('[Banner] Claude text generation failed, skipping:', err);
