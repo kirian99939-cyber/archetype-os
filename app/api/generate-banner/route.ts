@@ -85,6 +85,24 @@ async function generateBannerText(
   return JSON.parse(jsonMatch[0]);
 }
 
+const SAFE_ZONE_HINTS: Record<string, string> = {
+  stories: 'Layout note: Stories format — avoid placing text in the top 15% (status bar, clock) and bottom 18% (swipe-up area, reply bar). The rest of the image is free for creative text placement — top-third, center, lower-third are all fine.',
+  feed: 'Layout note: Square feed post — avoid placing key text in the bottom 8% where action buttons may overlap. Otherwise text can go anywhere.',
+  feed_vertical: 'Layout note: Vertical feed post — bottom 12% may be partially cropped in some feeds. Place the most important text (headline, CTA) above that zone. Otherwise creative freedom for layout.',
+  banner: 'Layout note: Horizontal banner — avoid the outer 5% margins. Text can be placed freely: left-aligned, centered, right-side — vary the composition.',
+  post_wide: 'Layout note: Wide post format — keep key text within the inner 90% of the image.',
+  rsya_vertical: 'Layout note: Small vertical ad — use large, bold text for readability at small sizes. Keep text concise.',
+};
+
+const SIZE_TO_FORMAT: Record<string, string> = {
+  '1080x1920': 'stories',
+  '1080x1080': 'feed',
+  '1080x1350': 'feed_vertical',
+  '1920x1080': 'banner',
+  '1080x607':  'post_wide',
+  '240x400':   'rsya_vertical',
+};
+
 function buildImagePrompt(req: GenerateBannerRequest, bannerText: BannerText | null, offer?: string, imageUrls?: string[]): string {
   const archetypeVisualMap: Record<string, string> = {
     mem: 'meme-style layout, bold impact font, internet culture aesthetics',
@@ -128,15 +146,19 @@ function buildImagePrompt(req: GenerateBannerRequest, bannerText: BannerText | n
 
   const hasProductImages = imageUrls && imageUrls.length > 0;
 
+  const formatKey = req.width && req.height ? SIZE_TO_FORMAT[`${req.width}x${req.height}`] : undefined;
+  const safeZoneHint = formatKey ? SAFE_ZONE_HINTS[formatKey] : '';
+
   return [
     `Advertising banner: ${req.prompt}.`,
     hasProductImages ? 'Use the provided product image as the main visual element.' : '',
     archetypeDesc ? `Visual style: ${archetypeDesc}.` : '',
     'High quality, commercial advertising photography, professional graphic design.',
     textInstructions.length > 0
-      ? `Include the following text overlays: ${textInstructions.join('. ')}.`
+      ? `Include the following text overlays EXACTLY ONCE each — do NOT duplicate any text: ${textInstructions.join('. ')}.`
       : 'No text or typography in the image.',
     `Aspect ratio optimized for ${req.width && req.height ? `${req.width}x${req.height}` : '16:9'} banner.`,
+    safeZoneHint,
     'ВАЖНО: Весь текст на баннере должен быть ТОЛЬКО на русском языке. Заголовок, CTA кнопка, любой текст — всё только по-русски.',
   ]
     .filter(Boolean)
