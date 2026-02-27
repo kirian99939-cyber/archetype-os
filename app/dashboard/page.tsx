@@ -13,6 +13,7 @@ import HistoryPage from '@/components/HistoryPage';
 import PricingSection from '@/components/PricingSection';
 import BannerLibraryPage from '@/components/BannerLibraryPage';
 import AdminPage from '@/components/AdminPage';
+import ChangelogModal, { hasUnseenChangelog } from '@/components/ChangelogModal';
 
 type Page =
   | 'dashboard'
@@ -48,6 +49,8 @@ export default function DashboardRoute() {
   const [activePage, setActivePage] = useState<Page>('dashboard');
   const [bannersBusy, setBannersBusy] = useState(false);
   const [pendingNav, setPendingNav] = useState<Page | null>(null);
+  const [changelogOpen, setChangelogOpen] = useState(false);
+  const [hasNewChangelog, setHasNewChangelog] = useState(false);
   const isAdmin = ADMIN_EMAILS.includes(session?.user?.email || '');
 
   const navItems = [
@@ -60,6 +63,14 @@ export default function DashboardRoute() {
       router.replace('/landing');
     }
   }, [status, router]);
+
+  // Auto-show changelog on first visit after update
+  useEffect(() => {
+    if (status === 'authenticated' && hasUnseenChangelog()) {
+      setHasNewChangelog(true);
+      setChangelogOpen(true);
+    }
+  }, [status]);
 
   const handleNavigate = useCallback((page: Page | string) => {
     const target = page as Page;
@@ -146,6 +157,26 @@ export default function DashboardRoute() {
             );
           })}
         </nav>
+
+        {/* Changelog button */}
+        <div className="px-2 pb-3">
+          <button
+            onClick={() => { setChangelogOpen(true); setHasNewChangelog(false); }}
+            className="w-full text-left flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150"
+            style={{ color: 'rgba(255,255,255,0.5)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = '#fff'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.5)'; }}
+          >
+            <span className="w-4 text-center shrink-0">🚀</span>
+            <span className="leading-tight">Что нового</span>
+            {hasNewChangelog && (
+              <span
+                className="w-2 h-2 rounded-full ml-auto shrink-0"
+                style={{ background: '#C8FF00' }}
+              />
+            )}
+          </button>
+        </div>
       </aside>
 
       {/* Main area */}
@@ -280,6 +311,12 @@ export default function DashboardRoute() {
           </div>
         </div>
       )}
+
+      {/* ══════════ CHANGELOG MODAL ══════════ */}
+      <ChangelogModal
+        isOpen={changelogOpen}
+        onClose={() => { setChangelogOpen(false); setHasNewChangelog(false); }}
+      />
     </div>
   );
 }
