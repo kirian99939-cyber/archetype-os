@@ -777,6 +777,9 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
             ? [brief.imageLink.trim()]
             : [];
 
+        const shouldUsePhoto = hypothesis?.usePhoto !== false;
+        const imageUrlsToSend = shouldUsePhoto && briefImageUrls.length > 0 ? briefImageUrls : undefined;
+
         try {
           const res = await fetch('/api/generate-banner', {
             method: 'POST',
@@ -789,7 +792,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
               archetype,
               offer: brief.offer || undefined,
               isFirstBanner,
-              imageUrls: briefImageUrls.length > 0 ? briefImageUrls : undefined,
+              imageUrls: imageUrlsToSend,
             }),
           });
 
@@ -906,6 +909,9 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
         ? [brief.imageLink.trim()]
         : [];
 
+    const shouldUsePhoto = hypothesis?.usePhoto !== false;
+    const imageUrlsToSend = shouldUsePhoto && briefImageUrls.length > 0 ? briefImageUrls : undefined;
+
     // Сохраняем предыдущую версию и ставим loading
     setBannerGroups(prev =>
       prev.map((g, gi) =>
@@ -943,7 +949,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
           archetype,
           offer: brief.offer || undefined,
           isFirstBanner: false, // рефреш не списывает кредит
-          imageUrls: briefImageUrls.length > 0 ? briefImageUrls : undefined,
+          imageUrls: imageUrlsToSend,
         }),
       });
 

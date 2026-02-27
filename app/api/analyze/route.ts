@@ -82,6 +82,7 @@ export interface NewHypothesis {
   headline: string;
   cta: string;
   hook: string;
+  usePhoto?: boolean;
   archetypeId: string;
   archetypeLabel: string;
   rank: number;
@@ -352,6 +353,10 @@ ${body.hybridName ? `Название гибрида: ${body.hybridName}` : ''}
 
 Создай ОДНУ гибридную гипотезу — именно СКРЕЩИВАНИЕ подходов, а не чередование.
 
+Если пользователь загрузил фото (спикер, продукт, команда), определи, подходит ли оно для визуальной концепции этой гипотезы.
+Установи usePhoto: true если визуал предполагает реального человека, продукт, команду, эксперта, лицо бренда.
+Установи usePhoto: false если визуал абстрактный, графический, типографический, сюрреалистический или не предполагает конкретные фотографии.
+
 Верни ТОЛЬКО валидный JSON без markdown:
 {
   "newHypotheses": [{
@@ -359,7 +364,8 @@ ${body.hybridName ? `Название гибрида: ${body.hybridName}` : ''}
     "visual": "Описание визуала: что изображено, стиль, настроение, цвета",
     "headline": "Заголовок рекламного объявления",
     "cta": "Текст кнопки или призыв к действию",
-    "hook": "Первая фраза-крючок для захвата внимания"
+    "hook": "Первая фраза-крючок для захвата внимания",
+    "usePhoto": true
   }]
 }`,
         messages: [{
@@ -380,6 +386,7 @@ ${body.hybridName ? `Название гибрида: ${body.hybridName}` : ''}
         headline: h.headline || '',
         cta: h.cta || '',
         hook: h.hook || '',
+        usePhoto: h.usePhoto ?? true,
         archetypeId: `${arch1.id}×${arch2.id}`,
         archetypeLabel: body.hybridName || `${def1?.label ?? arch1.id} × ${def2?.label ?? arch2.id}`,
         rank: 0,
@@ -443,6 +450,10 @@ ${body.hybridName ? `Название гибрида: ${body.hybridName}` : ''}
 Гипотеза ОБЯЗАНА воплощать стиль и логику архетипа "${archLabel}".
 Выбери самый сильный и эффективный подход.
 
+Если пользователь загрузил фото (спикер, продукт, команда), определи, подходит ли оно для визуальной концепции этой гипотезы.
+Установи usePhoto: true если визуал предполагает реального человека, продукт, команду, эксперта, лицо бренда.
+Установи usePhoto: false если визуал абстрактный, графический, типографический, сюрреалистический или не предполагает конкретные фотографии.
+
 Верни ТОЛЬКО валидный JSON без markdown:
 {
   "newHypotheses": [
@@ -451,7 +462,8 @@ ${body.hybridName ? `Название гибрида: ${body.hybridName}` : ''}
       "visual": "Описание визуала",
       "headline": "Заголовок",
       "cta": "Призыв к действию",
-      "hook": "Фраза-крючок"
+      "hook": "Фраза-крючок",
+      "usePhoto": true
     }
   ]
 }`,
@@ -475,6 +487,7 @@ ${body.hybridName ? `Название гибрида: ${body.hybridName}` : ''}
               headline: h.headline || '',
               cta: h.cta || '',
               hook: h.hook || '',
+              usePhoto: h.usePhoto ?? true,
               archetypeId: arch.id,
               archetypeLabel: archLabel,
               rank: arch.rank,

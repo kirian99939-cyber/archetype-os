@@ -151,7 +151,7 @@ function buildImagePrompt(req: GenerateBannerRequest, bannerText: BannerText | n
 
   return [
     `Advertising banner: ${req.prompt}.`,
-    hasProductImages ? 'Use the provided product image as the main visual element.' : '',
+    hasProductImages ? 'Incorporate the provided reference image naturally into the composition — use it as a key visual element but integrate it with the overall design concept.' : '',
     archetypeDesc ? `Visual style: ${archetypeDesc}.` : '',
     'High quality, commercial advertising photography, professional graphic design.',
     textInstructions.length > 0
