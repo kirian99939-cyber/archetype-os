@@ -1144,9 +1144,10 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
                   type="text"
                   value={brief.utp}
                   onChange={e => setBrief(p => ({ ...p, utp: e.target.value }))}
-                  placeholder="В чём уникальность предложения?"
+                  placeholder="Например: Единственный сервис с доставкой за 24 часа"
                   className="input-field"
                 />
+                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 4 }}>Чем вы лучше конкурентов? Что делает вас уникальными?</p>
               </div>
             </div>
 
@@ -1158,7 +1159,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
                   type="text"
                   value={brief.offer}
                   onChange={e => setBrief(p => ({ ...p, offer: e.target.value }))}
-                  placeholder="Например: доставка и установка бесплатно"
+                  placeholder="Например: Скидка 30% до конца недели / Первый месяц бесплатно"
                   className="input-field flex-1"
                 />
                 <button
@@ -1203,6 +1204,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
                   ))}
                 </div>
               )}
+              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 4 }}>Конкретное предложение для клиента прямо сейчас — скидка, бонус, подарок, пробный период</p>
             </div>
 
             {/* Platforms chips */}
