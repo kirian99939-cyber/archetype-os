@@ -204,9 +204,6 @@ export default function DashboardRoute() {
             <div className="max-w-5xl mx-auto">
               <PricingSection
                 isLoggedIn={true}
-                onSelectPlan={(planId) => {
-                  window.open('https://t.me/archetype_protocol', '_blank');
-                }}
               />
             </div>
           )}

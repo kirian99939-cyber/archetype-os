@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { addCredits } from '@/lib/supabase';
 
-// Секретный ключ из личного кабинета Prodamus → Настройки
 const PRODAMUS_SECRET = process.env.PRODAMUS_SECRET_KEY!;
+
+/** Маппинг суммы оплаты → количество кредитов */
+const PRICE_TO_CREDITS: Record<number, number> = {
+  1490: 5,    // Старт
+  4990: 20,   // Про
+  9990: 50,   // Бизнес
+};
 
 /**
  * Проверка подписи webhook от Prodamus
@@ -37,27 +44,62 @@ export async function POST(req: NextRequest) {
     // Проверяем подпись
     if (!verifySignature(data, signature)) {
       console.error('[prodamus-webhook] Invalid signature');
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
+      // Возвращаем 200 чтобы Prodamus не ретраил
+      return NextResponse.json({ success: false, error: 'Invalid signature' }, { status: 200 });
     }
 
-    // Оплата подтверждена!
+    const orderId = data['order_id'] || '';
+    const sum = parseFloat(data['sum'] || data['payment_amount'] || '0');
+    const customerEmail = data['customer_email'] || '';
+    const customerPhone = data['customer_phone'] || '';
+    const paymentDate = data['date'] || '';
+
     console.log('[prodamus-webhook] Payment confirmed:', {
-      orderId: data['order_id'],
-      sum: data['sum'],
-      customerEmail: data['customer_email'],
-      customerPhone: data['customer_phone'],
-      date: data['date'],
+      orderId,
+      sum,
+      customerEmail,
+      customerPhone,
+      date: paymentDate,
     });
 
-    // TODO: Здесь логика после успешной оплаты:
-    // - Обновить статус пользователя в БД
-    // - Выдать доступ к платным функциям
-    // - Отправить email с подтверждением
+    // Определяем количество кредитов по сумме
+    const credits = PRICE_TO_CREDITS[sum];
+
+    if (!credits) {
+      console.error(`[prodamus-webhook] Unknown payment sum: ${sum}. No credits mapping found.`);
+      return NextResponse.json({
+        success: true,
+        warning: `Unknown sum ${sum}, no credits added`,
+      }, { status: 200 });
+    }
+
+    if (!customerEmail) {
+      console.error('[prodamus-webhook] No customer_email in payment data');
+      return NextResponse.json({
+        success: true,
+        warning: 'No customer email, cannot add credits',
+      }, { status: 200 });
+    }
+
+    // Начисляем кредиты
+    const credited = await addCredits(customerEmail, credits);
+
+    if (credited) {
+      console.log(`[prodamus-webhook] +${credits} credits for ${customerEmail} (order ${orderId}, sum ${sum})`);
+    } else {
+      console.error(`[prodamus-webhook] Failed to add ${credits} credits for ${customerEmail}`);
+    }
 
     // Prodamus ожидает HTTP 200 как подтверждение получения
-    return NextResponse.json({ success: true }, { status: 200 });
+    return NextResponse.json({
+      success: true,
+      credited,
+      credits,
+      email: customerEmail,
+    }, { status: 200 });
   } catch (error) {
     console.error('[prodamus-webhook] Error:', error);
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+    // Всегда 200 чтобы Prodamus не ретраил
+    return NextResponse.json({ success: false, error: String(error) }, { status: 200 });
   }
 }

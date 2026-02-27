@@ -1,6 +1,7 @@
 'use client';
 
-import { signIn } from 'next-auth/react';
+import { signIn, useSession } from 'next-auth/react';
+import { useProdamus } from '@/hooks/useProdamus';
 
 const ACCENT = '#C8FF00';
 const ACCENT_BG = 'rgba(200,255,0,0.1)';
@@ -109,12 +110,48 @@ function formatPrice(n: number): string {
 }
 
 export default function PricingSection({ isLoggedIn, onSelectPlan }: PricingSectionProps) {
-  const handleClick = (planId: string) => {
-    if (onSelectPlan) {
-      onSelectPlan(planId);
-    } else if (!isLoggedIn) {
+  const { data: session } = useSession();
+  const { payWithDetails } = useProdamus();
+
+  const handleClick = (plan: typeof PLANS[number]) => {
+    // Free план — просто логин
+    if (plan.price === 0) {
+      if (isLoggedIn) {
+        // Уже залогинен с бесплатным планом — ничего не делаем
+        return;
+      }
       signIn('google', { callbackUrl: '/dashboard' });
+      return;
     }
+
+    // Платные планы — нужна авторизация
+    if (!isLoggedIn && !session) {
+      signIn('google', { callbackUrl: '/dashboard' });
+      return;
+    }
+
+    // Если есть внешний обработчик — делегируем
+    if (onSelectPlan) {
+      onSelectPlan(plan.id);
+      return;
+    }
+
+    // Открываем оплату через Prodamus
+    payWithDetails({
+      order_sum: plan.price,
+      currency: 'rub',
+      customer_email: session?.user?.email || '',
+      order_id: `creatika_${plan.id}_${Date.now()}`,
+      products: [
+        {
+          name: `Creatika — тариф ${plan.name} (${plan.credits} кредитов)`,
+          price: plan.price,
+          quantity: 1,
+        },
+      ],
+      urlSuccess: `${window.location.origin}/payment/success`,
+      urlReturn: `${window.location.origin}/payment/cancel`,
+    });
   };
 
   return (
@@ -197,15 +234,17 @@ export default function PricingSection({ isLoggedIn, onSelectPlan }: PricingSect
 
               {/* CTA */}
               <button
-                onClick={() => handleClick(plan.id)}
+                onClick={() => handleClick(plan)}
                 className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all mb-5"
                 style={
                   plan.highlighted
                     ? { background: ACCENT, color: '#0A0A0A' }
+                    : plan.price === 0 && isLoggedIn
+                    ? { background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.3)', cursor: 'default' }
                     : { background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.12)' }
                 }
               >
-                {plan.cta}
+                {plan.price === 0 && isLoggedIn ? 'Текущий план' : plan.cta}
               </button>
 
               {/* Credits badge */}
@@ -245,7 +284,7 @@ export default function PricingSection({ isLoggedIn, onSelectPlan }: PricingSect
 
       {/* Bottom note */}
       <p className="text-center text-white/20 text-xs mt-6">
-        Все тарифы — разовая оплата, кредиты не сгорают · Оплата через Telegram
+        Все тарифы — разовая оплата, кредиты не сгорают
       </p>
     </div>
   );

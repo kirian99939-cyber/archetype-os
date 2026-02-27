@@ -63,6 +63,37 @@ export async function spendCredit(userId: string): Promise<boolean> {
   return true;
 }
 
+/**
+ * Начисляет кредиты пользователю по email.
+ * Использует оптимистичный lock для атомарности.
+ */
+export async function addCredits(email: string, amount: number): Promise<boolean> {
+  const { data: user, error: findError } = await supabaseAdmin
+    .from('users')
+    .select('id, credits')
+    .eq('email', email)
+    .single();
+
+  if (findError || !user) {
+    console.error('[Supabase] addCredits: user not found', email, findError);
+    return false;
+  }
+
+  const { error } = await supabaseAdmin
+    .from('users')
+    .update({ credits: user.credits + amount })
+    .eq('id', user.id)
+    .eq('credits', user.credits); // оптимистичный lock
+
+  if (error) {
+    console.error('[Supabase] addCredits: update failed', error);
+    return false;
+  }
+
+  console.log(`[Supabase] addCredits: +${amount} credits for ${email} (was ${user.credits}, now ${user.credits + amount})`);
+  return true;
+}
+
 // ─── Projects ────────────────────────────────────────────────────────────────
 
 export interface ProjectPayload {
