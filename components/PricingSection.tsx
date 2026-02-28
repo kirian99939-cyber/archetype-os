@@ -41,6 +41,7 @@ const PLANS = [
     price: 1990,
     oldPrice: null,
     perCredit: null,
+    perBanner: '~50₽ за баннер',
     badge: null,
     highlighted: false,
     features: [
@@ -62,6 +63,7 @@ const PLANS = [
     price: 6990,
     oldPrice: null,
     perCredit: null,
+    perBanner: '~47₽ за баннер',
     badge: 'ЛУЧШИЙ ВЫБОР',
     highlighted: true,
     features: [
@@ -84,6 +86,7 @@ const PLANS = [
     price: 12990,
     oldPrice: null,
     perCredit: null,
+    perBanner: '~43₽ за баннер',
     badge: 'ДЛЯ КОМАНД',
     highlighted: false,
     features: [
@@ -217,6 +220,13 @@ export default function PricingSection({ isLoggedIn, onSelectPlan }: PricingSect
                   {plan.price === 0 ? '0 ₽' : `${formatPrice(plan.price)} ₽`}
                 </span>
               </div>
+
+              {/* Per banner */}
+              {(plan as any).perBanner && (
+                <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>
+                  {(plan as any).perBanner}
+                </p>
+              )}
 
               {/* Per credit */}
               <p className="text-white/30 text-xs mb-4">
