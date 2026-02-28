@@ -5,6 +5,9 @@ import Image from 'next/image';
 import { useSession } from 'next-auth/react';
 import type { AnalyzeResponse, NewHypothesis, RecommendV2Response, HybridArchetype } from '@/app/api/analyze/route';
 import { ARCHETYPES } from '@/lib/archetypes';
+import { BANNER_FORMATS, AD_PLATFORMS } from '@/lib/project-types';
+import type { Brief, BannerItem, BannerGroup, VisualMode, ProjectData } from '@/lib/project-types';
+import { useBannerGeneration, MAX_REFRESHES_PER_BANNER } from '@/hooks/useBannerGeneration';
 import AnimatedLogo from '@/components/AnimatedLogo';
 import LoadingMessages from '@/components/LoadingMessages';
 
@@ -30,92 +33,8 @@ const PLATFORMS = [
 ];
 
 
-const BANNER_FORMATS = [
-  // Соцсети
-  { key: 'feed',         label: 'Лента квадрат',      sublabel: '1080×1080',  width: 1080, height: 1080, group: 'social' },
-  { key: 'feed_vertical',label: 'Лента вертикальный',  sublabel: '1080×1350',  width: 1080, height: 1350, group: 'social' },
-  { key: 'stories',      label: 'Stories / Клипы',     sublabel: '1080×1920',  width: 1080, height: 1920, group: 'social' },
-  // Видео и сайты
-  { key: 'banner',       label: 'Горизонтальный',      sublabel: '1920×1080',  width: 1920, height: 1080, group: 'media' },
-  { key: 'post_wide',    label: 'Пост широкий',        sublabel: '1080×607',   width: 1080, height: 607,  group: 'media' },
-  // Рекламные сети
-  { key: 'rsya_vertical', label: 'РСЯ баннер',         sublabel: '240×400',    width: 240,  height: 400,  group: 'adnetwork' },
-];
-
-const AD_PLATFORMS = [
-  {
-    key: 'vk',
-    label: 'VK Реклама',
-    icon: '📱',
-    formats: ['feed', 'feed_vertical', 'stories', 'post_wide'],
-  },
-  {
-    key: 'yandex',
-    label: 'Яндекс Директ',
-    icon: '🔍',
-    formats: ['feed', 'post_wide', 'rsya_vertical'],
-  },
-  {
-    key: 'telegram',
-    label: 'Telegram Ads',
-    icon: '✈️',
-    formats: ['banner', 'post_wide'],
-  },
-  {
-    key: 'mytarget',
-    label: 'MyTarget (ОК)',
-    icon: '🎯',
-    formats: ['feed', 'post_wide', 'rsya_vertical'],
-  },
-  {
-    key: 'google',
-    label: 'Google Ads',
-    icon: '🌐',
-    formats: ['feed', 'feed_vertical', 'banner'],
-  },
-];
-
 const STEP_LABELS = ['Бриф', 'Архетип', 'Гипотезы', 'Баннеры'];
 
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type VisualMode = 'ai' | 'upload' | 'link';
-
-interface Brief {
-  product:      string;
-  price:        string;
-  audience:     string;
-  goal:         string;
-  utp:          string;
-  offer:        string;
-  toneOfVoice:  string;
-  platforms:    string[];
-  context:      string;
-  visualMode:   VisualMode;
-  imageUrls:    string[];   // uploaded photo public URLs
-  imageLink:    string;     // manual link URL
-}
-
-interface BannerItem {
-  key:      string;
-  label:    string;
-  sublabel: string;
-  width:    number;
-  height:   number;
-  taskId:   string | null;
-  imageUrl: string | null;
-  loading:  boolean;
-  error:    string | null;
-  refreshCount:     number;
-  previousVersions: string[];
-}
-
-interface BannerGroup {
-  hypothesisIndex: number;
-  hypothesisTitle: string;
-  banners: BannerItem[];
-}
 
 // ─── Small helpers ────────────────────────────────────────────────────────────
 
@@ -137,7 +56,12 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boolean) => void }) {
+interface NewProjectProps {
+  onBusyChange?: (busy: boolean) => void;
+  initialProject?: ProjectData;
+}
+
+export default function NewProject({ onBusyChange, initialProject }: NewProjectProps) {
   const { data: session } = useSession();
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
@@ -170,13 +94,6 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
   const lastHypothesesArchetype                   = useRef<string | null>(null);
 
   const [selectedHypotheses, setSelectedHypotheses] = useState<Set<number>>(new Set());
-  const [bannerGroups, setBannerGroups]             = useState<BannerGroup[]>([]);
-  const [activeBannerTab, setActiveBannerTab]       = useState(0);
-  const [isSwitchingTab, setIsSwitchingTab]         = useState(false);
-  const [showNoCreditsModal, setShowNoCreditsModal] = useState(false);
-  const [bannerHistory, setBannerHistory] = useState<any[]>([]);
-  const [showingHistory, setShowingHistory] = useState(false);
-  const [historyTab, setHistoryTab] = useState(0);
   const [selectedFormats, setSelectedFormats] = useState<Set<string>>(
     new Set(BANNER_FORMATS.map(f => f.key))
   );
@@ -206,8 +123,33 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
   const [resumeMeta, setResumeMeta]                = useState<{ id: string; title: string } | null>(null);
   const [resumeLoading, setResumeLoading]          = useState(false);
   const projectIdRef                               = useRef<string | null>(null);
-  const pollTimeoutsRef                            = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
-  const bannersSavedRef                            = useRef(false);
+
+  // ── Banner generation hook ──
+  const {
+    bannerGroups, setBannerGroups,
+    activeBannerTab, setActiveBannerTab,
+    isSwitchingTab,
+    anyBannerLoading,
+    showNoCreditsModal, setShowNoCreditsModal,
+    bannerHistory, setBannerHistory,
+    showingHistory, setShowingHistory,
+    historyTab, setHistoryTab,
+    activeBannerGroup,
+    bannersSavedRef,
+    handleGenerateBanners,
+    handleRefreshBanner,
+    handleDownload,
+    switchTab,
+  } = useBannerGeneration({
+    brief,
+    hypotheses,
+    selectedHypotheses,
+    selectedFormats,
+    selectedArchetypes,
+    analyzeResult,
+    projectIdRef,
+    onBusyChange,
+  });
 
   // ── Helpers ──
 
@@ -292,15 +234,6 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
 
   const removePhoto = (idx: number) =>
     setBrief(p => ({ ...p, imageUrls: p.imageUrls.filter((_, i) => i !== idx) }));
-
-  const switchTab = (gi: number) => {
-    if (gi === activeBannerTab) return;
-    setIsSwitchingTab(true);
-    setTimeout(() => {
-      setActiveBannerTab(gi);
-      setIsSwitchingTab(false);
-    }, 200);
-  };
 
   // ── Project persistence helpers ──
 
@@ -609,472 +542,81 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
-  // На маунте — проверяем localStorage на незавершённый проект
+  // Если передан initialProject — восстанавливаем state из него
   useEffect(() => {
+    if (!initialProject) return;
+
+    // Устанавливаем projectId
+    setProject(initialProject.id);
+
+    // Восстанавливаем бриф
+    if (initialProject.brief) {
+      setBrief(prev => ({ ...prev, ...initialProject.brief }));
+    }
+
+    // Восстанавливаем архетипы
+    if (initialProject.archetypes && initialProject.archetypes.length > 0) {
+      setSelectedArchetypes(initialProject.archetypes.map((a, i) => ({ id: a.id, rank: i + 1 })));
+    } else if (initialProject.archetype?.id) {
+      setSelectedArchetypes([{ id: initialProject.archetype.id, rank: 1 }]);
+    }
+
+    // Восстанавливаем гипотезы
+    if (Array.isArray(initialProject.hypotheses) && initialProject.hypotheses.length > 0) {
+      setHypotheses(initialProject.hypotheses as NewHypothesis[]);
+      setSelectedHypotheses(
+        new Set(Array.from({ length: Math.min(initialProject.hypotheses.length, 5) }, (_, i) => i)),
+      );
+      const archId = initialProject.archetype?.id ?? null;
+      lastHypothesesArchetype.current = archId;
+    }
+
+    // Восстанавливаем баннеры
+    if (Array.isArray(initialProject.banners) && initialProject.banners.length > 0) {
+      const restored = initialProject.banners.map((g) => ({
+        hypothesisIndex: g.hypothesisIndex,
+        hypothesisTitle: g.hypothesisTitle,
+        banners: g.banners.map(b => ({
+          ...b,
+          loading: false,
+          taskId: b.taskId ?? null,
+          error: b.error ?? null,
+          width: b.width ?? BANNER_FORMATS.find(f => f.key === b.key)?.width ?? 1080,
+          height: b.height ?? BANNER_FORMATS.find(f => f.key === b.key)?.height ?? 1080,
+          refreshCount: b.refreshCount ?? 0,
+          previousVersions: b.previousVersions ?? [],
+        })),
+      }));
+      setBannerGroups(restored);
+      bannersSavedRef.current = true; // уже сохранены в БД
+    }
+
+    // Восстанавливаем историю баннеров
+    if (Array.isArray(initialProject.banner_history) && initialProject.banner_history.length > 0) {
+      setBannerHistory(initialProject.banner_history);
+    }
+
+    // Переход на правильный шаг
+    if (initialProject.banners?.length || initialProject.status === 'completed') {
+      goTo(4);
+    } else if (initialProject.hypotheses?.length || initialProject.status === 'hypotheses') {
+      goTo(3);
+    } else if (initialProject.archetype?.id || initialProject.status === 'archetype') {
+      goTo(2);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // На маунте — проверяем localStorage на незавершённый проект (только если нет initialProject)
+  useEffect(() => {
+    if (initialProject) return; // пропускаем resume dialog
     try {
       const raw = localStorage.getItem('archetype_draft_project');
       if (!raw) return;
       const meta = JSON.parse(raw) as { id: string; title: string };
       if (meta?.id) setResumeMeta(meta);
     } catch {}
-  }, []);
-
-  // После завершения генерации всех баннеров — сохраняем в БД (один раз)
-  useEffect(() => {
-    const pid = projectIdRef.current;
-    if (!pid || bannerGroups.length === 0) return;
-    const allDone = bannerGroups.every(g => g.banners.every(b => !b.loading));
-    if (!allDone) return;
-    if (bannersSavedRef.current) return; // уже сохранено — не дублируем
-    bannersSavedRef.current = true;
-
-    fetch(`/api/projects/${pid}`, {
-      method:  'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        status:  'completed',
-        banners: bannerGroups.map(g => ({
-          hypothesisIndex: g.hypothesisIndex,
-          hypothesisTitle: g.hypothesisTitle,
-          banners: g.banners.map(b => ({
-            key: b.key, label: b.label, sublabel: b.sublabel,
-            imageUrl: b.imageUrl, error: b.error,
-          })),
-        })),
-      }),
-    }).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bannerGroups]);
-
-  // ── Step 4: banners ──
-
-  /** Поллинг одного баннера — возвращает Promise который резолвится когда баннер готов или ошибка */
-  const waitForBanner = (groupIndex: number, fmtKey: string, taskId: string): Promise<void> => {
-    return new Promise((resolve) => {
-      const MAX_POLL = 40; // 40 × 5с = 200 секунд макс
-      const INTERVAL = 5000;
-      let attempt = 0;
-
-      const poll = async () => {
-        attempt++;
-        try {
-          const res = await fetch(`/api/banner-status?taskId=${taskId}`);
-          const data = await res.json();
-
-          if (!res.ok) {
-            setBannerGroups(prev =>
-              prev.map((g, gi) =>
-                gi !== groupIndex
-                  ? g
-                  : {
-                      ...g,
-                      banners: g.banners.map(b =>
-                        b.key === fmtKey
-                          ? { ...b, loading: false, error: data.error || `HTTP ${res.status}` }
-                          : b
-                      ),
-                    }
-              )
-            );
-            resolve();
-            return;
-          }
-
-          if (data.ready && data.imageUrl) {
-            setBannerGroups(prev =>
-              prev.map((g, gi) =>
-                gi !== groupIndex
-                  ? g
-                  : {
-                      ...g,
-                      banners: g.banners.map(b =>
-                        b.key === fmtKey
-                          ? { ...b, loading: false, imageUrl: data.imageUrl }
-                          : b
-                      ),
-                    }
-              )
-            );
-            resolve();
-            return;
-          }
-
-          if (attempt >= MAX_POLL) {
-            setBannerGroups(prev =>
-              prev.map((g, gi) =>
-                gi !== groupIndex
-                  ? g
-                  : {
-                      ...g,
-                      banners: g.banners.map(b =>
-                        b.key === fmtKey
-                          ? { ...b, loading: false, error: 'Timeout: изображение не готово' }
-                          : b
-                      ),
-                    }
-              )
-            );
-            resolve();
-            return;
-          }
-
-          const timeoutId = setTimeout(poll, INTERVAL);
-          pollTimeoutsRef.current.add(timeoutId);
-        } catch {
-          setBannerGroups(prev =>
-            prev.map((g, gi) =>
-              gi !== groupIndex
-                ? g
-                : {
-                    ...g,
-                    banners: g.banners.map(b =>
-                      b.key === fmtKey
-                        ? { ...b, loading: false, error: 'Ошибка сети при поллинге' }
-                        : b
-                    ),
-                  }
-            )
-          );
-          resolve();
-        }
-      };
-
-      const timeoutId = setTimeout(poll, INTERVAL);
-      pollTimeoutsRef.current.add(timeoutId);
-    });
-  };
-
-  const handleGenerateBanners = async () => {
-    // Подсчёт стоимости: каждый баннер = 10 кредитов
-    const selectedList = Array.from(selectedHypotheses).sort((a, b) => a - b);
-    const activeFormatsCount = BANNER_FORMATS.filter(f => selectedFormats.has(f.key)).length;
-    const totalBanners = selectedList.length * activeFormatsCount;
-    const requiredCredits = totalBanners * 10;
-
-    // Предварительная проверка кредитов до запуска генерации
-    try {
-      const creditsRes = await fetch('/api/check-credits');
-      if (creditsRes.ok) {
-        const { credits } = await creditsRes.json();
-        if (credits < requiredCredits) {
-          setShowNoCreditsModal(true);
-          return;
-        }
-      } else if (creditsRes.status === 401) {
-        return;
-      }
-    } catch {}
-
-    const archetype = (selectedArchetypes[0]?.id || analyzeResult?.primaryArchetype || '').toLowerCase();
-
-    const initialGroups: BannerGroup[] = selectedList.map(idx => ({
-      hypothesisIndex: idx,
-      hypothesisTitle: hypotheses[idx]?.idea || `Гипотеза ${idx + 1}`,
-      banners: BANNER_FORMATS.filter(f => selectedFormats.has(f.key)).map(f => ({ ...f, taskId: null, imageUrl: null, loading: true, error: null, refreshCount: 0, previousVersions: [] })),
-    }));
-    bannersSavedRef.current = false;
-    setBannerGroups(initialGroups);
-    setActiveBannerTab(0);
-    setIsSwitchingTab(false);
-
-    const basePrompt = [
-      brief.product,
-      brief.utp      && `УТП: ${brief.utp}`,
-      brief.audience && `Аудитория: ${brief.audience}`,
-      brief.goal     && `Цель: ${brief.goal}`,
-    ].filter(Boolean).join('. ');
-
-    // === ПОСЛЕДОВАТЕЛЬНАЯ генерация: одна гипотеза за раз, один формат за раз ===
-    const activeFormats = BANNER_FORMATS.filter(f => selectedFormats.has(f.key));
-
-    for (let groupIndex = 0; groupIndex < selectedList.length; groupIndex++) {
-      const hypothesisIdx = selectedList[groupIndex];
-      const hypothesis = hypotheses[hypothesisIdx];
-      const prompt = hypothesis
-        ? `${basePrompt}. Гипотеза: ${hypothesis.idea}. Визуал: ${hypothesis.visual}.`
-        : basePrompt;
-
-      for (let fmtIndex = 0; fmtIndex < activeFormats.length; fmtIndex++) {
-        const fmt = activeFormats[fmtIndex];
-
-        const briefImageUrls: string[] =
-          brief.visualMode === 'upload' && brief.imageUrls.length > 0
-            ? brief.imageUrls
-            : brief.visualMode === 'link' && brief.imageLink.trim()
-            ? [brief.imageLink.trim()]
-            : [];
-
-        const shouldUsePhoto = hypothesis?.usePhoto !== false;
-        const imageUrlsToSend = shouldUsePhoto && briefImageUrls.length > 0 ? briefImageUrls : undefined;
-
-        try {
-          const res = await fetch('/api/generate-banner', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              prompt,
-              width: fmt.width,
-              height: fmt.height,
-              style: 'bold',
-              archetype,
-              offer: brief.offer || undefined,
-              toneOfVoice: brief.toneOfVoice || undefined,
-              imageUrls: imageUrlsToSend,
-            }),
-          });
-
-          if (res.status === 402 || res.status === 403) {
-            setShowNoCreditsModal(true);
-            setBannerGroups(prev =>
-              prev.map((g, gi) =>
-                gi !== groupIndex
-                  ? g
-                  : {
-                      ...g,
-                      banners: g.banners.map(b =>
-                        b.key === fmt.key
-                          ? { ...b, loading: false, error: 'Недостаточно кредитов' }
-                          : b
-                      ),
-                    }
-              )
-            );
-            return; // Прекращаем всю генерацию
-          }
-
-          if (!res.ok) {
-            const err = await res.json().catch(() => ({ error: 'Ошибка' }));
-            throw new Error(err.error || `HTTP ${res.status}`);
-          }
-
-          const data = await res.json();
-          const taskId = data.taskId;
-          if (!taskId) throw new Error('No taskId in NanoBanana API response');
-
-          setBannerGroups(prev =>
-            prev.map((g, gi) =>
-              gi !== groupIndex
-                ? g
-                : {
-                    ...g,
-                    banners: g.banners.map(b =>
-                      b.key === fmt.key ? { ...b, taskId } : b
-                    ),
-                  }
-            )
-          );
-
-          // Ждём готовности ЭТОГО баннера перед запуском следующего
-          await waitForBanner(groupIndex, fmt.key, taskId);
-
-          // Пауза 2 секунды между запросами чтобы не перегружать API
-          if (fmtIndex < activeFormats.length - 1 || groupIndex < selectedList.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-        } catch (err) {
-          setBannerGroups(prev =>
-            prev.map((g, gi) =>
-              gi !== groupIndex
-                ? g
-                : {
-                    ...g,
-                    banners: g.banners.map(b =>
-                      b.key === fmt.key
-                        ? {
-                            ...b,
-                            loading: false,
-                            error:
-                              err instanceof Error
-                                ? err.message
-                                : 'Ошибка запуска',
-                          }
-                        : b
-                    ),
-                  }
-            )
-          );
-          // Продолжаем со следующим форматом, не прерываем всё
-        }
-      }
-    }
-  };
-
-  const handleDownload = (banner: BannerItem) => {
-    if (!banner.imageUrl) return;
-    const a = document.createElement('a');
-    a.href = `/api/download-image?url=${encodeURIComponent(banner.imageUrl)}`;
-    a.download = `banner-${banner.key}-${Date.now()}.png`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
-
-  const MAX_REFRESHES_PER_BANNER = 3;
-
-  const handleRefreshBanner = async (groupIndex: number, fmtKey: string) => {
-    const group = bannerGroups[groupIndex];
-    if (!group) return;
-    const banner = group.banners.find(b => b.key === fmtKey);
-    if (!banner || banner.loading || banner.refreshCount >= MAX_REFRESHES_PER_BANNER) return;
-    bannersSavedRef.current = false; // сбрасываем для повторного сохранения после рефреша
-
-    // Проверяем кредиты перед рефрешем (10 кредитов)
-    try {
-      const creditsRes = await fetch('/api/check-credits');
-      if (creditsRes.ok) {
-        const { credits } = await creditsRes.json();
-        if (credits < 10) {
-          setShowNoCreditsModal(true);
-          return;
-        }
-      }
-    } catch {}
-
-    const archetype = (selectedArchetypes[0]?.id || analyzeResult?.primaryArchetype || '').toLowerCase();
-    const hypothesis = hypotheses[group.hypothesisIndex];
-    const basePrompt = [
-      brief.product,
-      brief.utp      && `УТП: ${brief.utp}`,
-      brief.audience && `Аудитория: ${brief.audience}`,
-      brief.goal     && `Цель: ${brief.goal}`,
-    ].filter(Boolean).join('. ');
-    const prompt = hypothesis
-      ? `${basePrompt}. Гипотеза: ${hypothesis.idea}. Визуал: ${hypothesis.visual}.`
-      : basePrompt;
-
-    const briefImageUrls: string[] =
-      brief.visualMode === 'upload' && brief.imageUrls.length > 0
-        ? brief.imageUrls
-        : brief.visualMode === 'link' && brief.imageLink.trim()
-        ? [brief.imageLink.trim()]
-        : [];
-
-    const shouldUsePhoto = hypothesis?.usePhoto !== false;
-    const imageUrlsToSend = shouldUsePhoto && briefImageUrls.length > 0 ? briefImageUrls : undefined;
-
-    // Сохраняем предыдущую версию и ставим loading
-    setBannerGroups(prev =>
-      prev.map((g, gi) =>
-        gi !== groupIndex
-          ? g
-          : {
-              ...g,
-              banners: g.banners.map(b =>
-                b.key === fmtKey
-                  ? {
-                      ...b,
-                      loading: true,
-                      error: null,
-                      taskId: null,
-                      previousVersions: b.imageUrl
-                        ? [...b.previousVersions, b.imageUrl]
-                        : b.previousVersions,
-                      refreshCount: b.refreshCount + 1,
-                    }
-                  : b
-              ),
-            }
-      )
-    );
-
-    try {
-      const res = await fetch('/api/generate-banner', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt,
-          width: banner.width,
-          height: banner.height,
-          style: 'bold',
-          archetype,
-          offer: brief.offer || undefined,
-          toneOfVoice: brief.toneOfVoice || undefined,
-          imageUrls: imageUrlsToSend,
-        }),
-      });
-
-      if (res.status === 402 || res.status === 403) {
-        setShowNoCreditsModal(true);
-        setBannerGroups(prev =>
-          prev.map((g, gi) =>
-            gi !== groupIndex ? g : {
-              ...g,
-              banners: g.banners.map(b =>
-                b.key === fmtKey ? { ...b, loading: false, error: 'Недостаточно кредитов' } : b
-              ),
-            }
-          )
-        );
-        return;
-      }
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Ошибка' }));
-        throw new Error(err.error || `HTTP ${res.status}`);
-      }
-
-      const data = await res.json();
-      const taskId = data.taskId;
-      if (!taskId) throw new Error('No taskId in NanoBanana API response');
-
-      setBannerGroups(prev =>
-        prev.map((g, gi) =>
-          gi !== groupIndex ? g : {
-            ...g,
-            banners: g.banners.map(b =>
-              b.key === fmtKey ? { ...b, taskId } : b
-            ),
-          }
-        )
-      );
-
-      await waitForBanner(groupIndex, fmtKey, taskId);
-    } catch (err) {
-      // При ошибке восстанавливаем предыдущую версию
-      setBannerGroups(prev =>
-        prev.map((g, gi) =>
-          gi !== groupIndex ? g : {
-            ...g,
-            banners: g.banners.map(b => {
-              if (b.key !== fmtKey) return b;
-              const prevUrl = b.previousVersions[b.previousVersions.length - 1] || null;
-              return {
-                ...b,
-                loading: false,
-                imageUrl: prevUrl ?? b.imageUrl,
-                error: err instanceof Error ? err.message : 'Ошибка обновления',
-                previousVersions: prevUrl
-                  ? b.previousVersions.slice(0, -1)
-                  : b.previousVersions,
-                refreshCount: b.refreshCount - 1, // откатываем счётчик
-              };
-            }),
-          }
-        )
-      );
-    }
-  };
-
-  const activeArchetype = selectedArchetypes.length > 0
-    ? selectedArchetypes.map(a => ARCHETYPES.find(d => d.id === a.id)?.label ?? a.id).join(', ')
-    : analyzeResult?.primaryArchetype || null;
-  const anyBannerLoading = bannerGroups.some(g => g.banners.some(b => b.loading));
-  const activeBannerGroup = bannerGroups[activeBannerTab] ?? null;
-
-
-  useEffect(() => {
-    onBusyChange?.(anyBannerLoading);
-  }, [anyBannerLoading, onBusyChange]);
-
-  useEffect(() => {
-    if (!anyBannerLoading) return;
-    const handler = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [anyBannerLoading]);
+  }, [initialProject]);
 
   // ─── Render ───────────────────────────────────────────────────────────────
 

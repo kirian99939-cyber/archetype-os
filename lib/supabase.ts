@@ -97,12 +97,14 @@ export async function addCredits(email: string, amount: number): Promise<boolean
 // ─── Projects ────────────────────────────────────────────────────────────────
 
 export interface ProjectPayload {
-  title?:      string;
-  brief?:      Record<string, unknown>;
-  archetype?:  Record<string, unknown>;
-  hypotheses?: unknown[];
-  banners?:    unknown[];
-  status?:     string;
+  title?:            string;
+  brief?:            Record<string, unknown>;
+  archetype?:        Record<string, unknown>;
+  archetypes?:       Record<string, unknown>[];
+  hypotheses?:       unknown[];
+  banners?:          unknown[];
+  selected_formats?: string[];
+  status?:           string;
 }
 
 /**
@@ -145,7 +147,7 @@ export async function saveProject(
 export async function getProjects(userId: string) {
   const { data, error } = await supabaseAdmin
     .from('projects')
-    .select('id, title, status, created_at, updated_at, archetype, banners, banner_history')
+    .select('id, title, status, created_at, updated_at, archetype, archetypes, banners, banner_history')
     .eq('user_id', userId)
     .order('updated_at', { ascending: false });
 

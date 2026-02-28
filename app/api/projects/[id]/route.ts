@@ -44,6 +44,11 @@ export async function PATCH(
 
   const body: ProjectPayload & { banner_history?: any[] } = await req.json();
 
+  // Синхронизация: если передан archetypes, записываем archetypes[0] в archetype для обратной совместимости
+  if (body.archetypes && body.archetypes.length > 0 && !body.archetype) {
+    body.archetype = body.archetypes[0];
+  }
+
   if (body.status === 'completed' && body.banners) {
     const { data: current } = await supabaseAdmin
       .from('projects')

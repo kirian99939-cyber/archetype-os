@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { ARCHETYPES } from '@/lib/archetypes';
 import AnimatedLogo from '@/components/AnimatedLogo';
 
@@ -90,6 +91,7 @@ function totalReadyBanners(banners: BannerGroup[] | null): number {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function HistoryPage({ onNavigate }: HistoryPageProps) {
+  const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState<string | null>(null);
@@ -139,11 +141,7 @@ export default function HistoryPage({ onNavigate }: HistoryPageProps) {
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
 
   const handleContinue = (project: Project) => {
-    localStorage.setItem(
-      'archetype_draft_project',
-      JSON.stringify({ id: project.id, title: project.title || 'Без названия' }),
-    );
-    onNavigate('new-project');
+    router.push(`/project/${project.id}`);
   };
 
   // ── Loading ──────────────────────────────────────────────────────────────────
@@ -184,7 +182,7 @@ export default function HistoryPage({ onNavigate }: HistoryPageProps) {
             Создайте первый проект — он появится здесь
           </p>
           <button
-            onClick={() => onNavigate('new-project')}
+            onClick={() => router.push('/project/new')}
             className="btn-primary text-sm px-8"
           >
             + Новый проект
@@ -204,7 +202,7 @@ export default function HistoryPage({ onNavigate }: HistoryPageProps) {
           <h2 className="text-white font-semibold text-xl">История проектов</h2>
           <p className="text-white/35 text-sm mt-0.5">{projects.length} {projects.length === 1 ? 'проект' : 'проектов'}</p>
         </div>
-        <button onClick={() => onNavigate('new-project')} className="btn-primary text-sm px-5">
+        <button onClick={() => router.push('/project/new')} className="btn-primary text-sm px-5">
           + Новый
         </button>
       </div>

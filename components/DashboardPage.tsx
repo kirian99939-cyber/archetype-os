@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { ARCHETYPES } from '@/lib/archetypes';
 
 const ACCENT = '#C8FF00';
@@ -32,9 +33,9 @@ const STATUS_META: Record<DisplayStatus, { label: string; color: string; bg: str
 };
 
 const QUICK_ACTIONS = [
-  { label: 'Создать проект', icon: '+', page: 'new-project' },
-  { label: 'Библиотека архетипов', icon: '◈', page: 'archetypes' },
-  { label: 'История генераций', icon: '◷', page: 'history' },
+  { label: 'Создать проект', icon: '+', page: 'new-project', isRoute: true },
+  { label: 'Библиотека архетипов', icon: '◈', page: 'archetypes', isRoute: false },
+  { label: 'История генераций', icon: '◷', page: 'history', isRoute: false },
 ];
 
 function mapStatus(status: string): DisplayStatus {
@@ -64,6 +65,7 @@ function countBanners(banners: any[] | null): number {
 
 export default function DashboardPage({ onNavigate }: Props) {
   const { data: session } = useSession();
+  const router = useRouter();
   const [projects, setProjects] = useState<ProjectData[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -128,7 +130,7 @@ export default function DashboardPage({ onNavigate }: Props) {
           {QUICK_ACTIONS.map((a) => (
             <button
               key={a.page}
-              onClick={() => onNavigate(a.page)}
+              onClick={() => a.isRoute ? router.push('/project/new') : onNavigate(a.page)}
               className="rounded-xl px-4 py-4 border flex items-center gap-3 text-left transition-all group"
               style={{
                 background: 'rgba(255,255,255,0.03)',
@@ -182,7 +184,7 @@ export default function DashboardPage({ onNavigate }: Props) {
             <div className="px-5 py-8 text-center">
               <p className="text-white/25 text-sm mb-3">Проектов пока нет</p>
               <button
-                onClick={() => onNavigate('new-project')}
+                onClick={() => router.push('/project/new')}
                 className="text-sm font-medium px-4 py-2 rounded-lg transition-colors"
                 style={{ color: ACCENT, background: ACCENT_BG }}
               >
@@ -203,10 +205,7 @@ export default function DashboardPage({ onNavigate }: Props) {
                   style={{
                     borderTop: i > 0 ? '1px solid rgba(255,255,255,0.06)' : 'none',
                   }}
-                  onClick={() => {
-                    localStorage.setItem('archetype_draft_project', JSON.stringify({ id: p.id, title: p.title }));
-                    onNavigate('new-project');
-                  }}
+                  onClick={() => router.push(`/project/${p.id}`)}
                   onMouseEnter={(e) => {
                     (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.04)';
                   }}

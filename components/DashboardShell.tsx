@@ -1,18 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import ArchetypesPage from '@/components/ArchetypesPage';
-import SettingsPage from '@/components/SettingsPage';
-import AnalyticsPage from '@/components/AnalyticsPage';
-import DashboardPage from '@/components/DashboardPage';
-import HistoryPage from '@/components/HistoryPage';
-import PricingSection from '@/components/PricingSection';
-import BannerLibraryPage from '@/components/BannerLibraryPage';
-import AdminPage from '@/components/AdminPage';
-import ReferralDashboard from '@/components/ReferralDashboard';
 import AnimatedLogo from '@/components/AnimatedLogo';
 import ChangelogModal, { hasUnseenChangelog } from '@/components/ChangelogModal';
 
@@ -29,25 +20,29 @@ type Page =
   | 'admin';
 
 const NAV_ITEMS: { id: Page; label: string; icon: string }[] = [
-  { id: 'dashboard',   label: 'Панель управления', icon: '▦' },
-  { id: 'new-project', label: 'Новый проект',       icon: '+' },
-  { id: 'archetypes',  label: 'Архетипы',           icon: '◈' },
-  { id: 'history',     label: 'История генераций',  icon: '◷' },
-  { id: 'analytics',   label: 'Аналитика',          icon: '↗' },
-  { id: 'banner-library' as Page, label: 'Все баннеры', icon: '📚' },
-  { id: 'referrals' as Page, label: 'Рефералы', icon: '🎁' },
-  { id: 'pricing' as Page, label: 'Тарифы', icon: '⚡' },
-  { id: 'settings',    label: 'Настройки',          icon: '⚙' },
+  { id: 'dashboard',      label: 'Панель управления', icon: '▦' },
+  { id: 'new-project',    label: 'Новый проект',       icon: '+' },
+  { id: 'archetypes',     label: 'Архетипы',           icon: '◈' },
+  { id: 'history',        label: 'История генераций',  icon: '◷' },
+  { id: 'analytics',      label: 'Аналитика',          icon: '↗' },
+  { id: 'banner-library', label: 'Все баннеры',        icon: '📚' },
+  { id: 'referrals',      label: 'Рефералы',           icon: '🎁' },
+  { id: 'pricing',        label: 'Тарифы',             icon: '⚡' },
+  { id: 'settings',       label: 'Настройки',          icon: '⚙' },
 ];
 
 const ADMIN_EMAILS = ['kirian99939@gmail.com'];
-
 const ACCENT = '#C8FF00';
 
-export default function DashboardRoute() {
+interface DashboardShellProps {
+  children: React.ReactNode;
+  activePage?: string;
+  title?: string;
+}
+
+export default function DashboardShell({ children, activePage, title }: DashboardShellProps) {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [activePage, setActivePage] = useState<Page>('dashboard');
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [hasNewChangelog, setHasNewChangelog] = useState(false);
   const [referralCount, setReferralCount] = useState(0);
@@ -64,15 +59,12 @@ export default function DashboardRoute() {
     }
   }, [status, router]);
 
-  // Auto-show changelog on first visit after update
   useEffect(() => {
     if (status === 'authenticated' && hasUnseenChangelog()) {
       setHasNewChangelog(true);
-      setChangelogOpen(true);
     }
   }, [status]);
 
-  // Fetch referral count for badge
   useEffect(() => {
     if (status === 'authenticated') {
       fetch('/api/referral/stats')
@@ -82,14 +74,17 @@ export default function DashboardRoute() {
     }
   }, [status]);
 
-  const handleNavigate = useCallback((page: Page | string) => {
-    const target = page as Page;
-    if (target === 'new-project') {
+  const handleNavigate = (page: string) => {
+    if (page === 'new-project') {
       router.push('/project/new');
       return;
     }
-    setActivePage(target);
-  }, [router]);
+    router.push('/dashboard');
+    // Для не-проектных страниц: используем dashboard SPA навигацию через query param
+    if (page !== 'dashboard') {
+      router.push(`/dashboard?page=${page}`);
+    }
+  };
 
   if (status === 'loading') {
     return (
@@ -100,13 +95,13 @@ export default function DashboardRoute() {
     );
   }
 
-  const credits = session?.user?.credits ?? 0;
+  const credits = (session?.user as any)?.credits ?? 0;
   const userName = session?.user?.name ?? 'Пользователь';
   const userImage = session?.user?.image;
+  const headerTitle = title || navItems.find(i => i.id === activePage)?.label || 'Проект';
 
   return (
     <div className="min-h-screen flex" style={{ background: 'var(--background)' }}>
-
       {/* Sidebar */}
       <aside
         className="flex flex-col border-r border-white/10 shrink-0"
@@ -169,10 +164,7 @@ export default function DashboardRoute() {
             <span className="w-4 text-center shrink-0">🚀</span>
             <span className="leading-tight">Что нового</span>
             {hasNewChangelog && (
-              <span
-                className="w-2 h-2 rounded-full ml-auto shrink-0"
-                style={{ background: '#C8FF00' }}
-              />
+              <span className="w-2 h-2 rounded-full ml-auto shrink-0" style={{ background: '#C8FF00' }} />
             )}
           </button>
         </div>
@@ -180,12 +172,8 @@ export default function DashboardRoute() {
 
       {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0">
-
         <header className="h-14 border-b border-white/10 px-6 flex items-center justify-between shrink-0">
-          <h1 className="text-white font-semibold text-base">
-            {navItems.find((i) => i.id === activePage)?.label}
-          </h1>
-
+          <h1 className="text-white font-semibold text-base">{headerTitle}</h1>
           <div className="flex items-center gap-3">
             <div
               className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg"
@@ -194,16 +182,9 @@ export default function DashboardRoute() {
               <span>🪙</span>
               <span>{credits.toLocaleString('ru-RU')} кр.</span>
             </div>
-
             <div className="flex items-center gap-2">
               {userImage ? (
-                <Image
-                  src={userImage}
-                  alt={userName}
-                  width={28}
-                  height={28}
-                  className="rounded-full"
-                />
+                <Image src={userImage} alt={userName} width={28} height={28} className="rounded-full" />
               ) : (
                 <div
                   className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
@@ -225,25 +206,11 @@ export default function DashboardRoute() {
         </header>
 
         <main className="flex-1 overflow-auto p-6">
-          {activePage === 'dashboard'   && <DashboardPage onNavigate={handleNavigate} />}
-          {activePage === 'archetypes'  && <ArchetypesPage />}
-          {activePage === 'analytics'   && <AnalyticsPage />}
-          {activePage === 'banner-library' && <BannerLibraryPage />}
-          {activePage === 'referrals' && <ReferralDashboard />}
-          {activePage === 'pricing'    && (
-            <div className="max-w-5xl mx-auto">
-              <PricingSection
-                isLoggedIn={true}
-              />
-            </div>
-          )}
-          {activePage === 'settings'    && <SettingsPage />}
-          {activePage === 'admin' && isAdmin && <AdminPage />}
-          {activePage === 'history'     && <HistoryPage onNavigate={handleNavigate} />}
+          {children}
         </main>
       </div>
 
-      {/* ══════════ SUPPORT BUTTON ══════════ */}
+      {/* Support button */}
       <div className="fixed z-50 flex items-center" style={{ bottom: 24, right: 24 }}>
         <div className="group relative flex items-center">
           <span
@@ -256,14 +223,10 @@ export default function DashboardRoute() {
             onClick={() => window.open('https://t.me/creatika_product_bot', '_blank')}
             className="flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110"
             style={{
-              width: 56,
-              height: 56,
-              background: '#C8FF00',
-              color: '#0A0A0A',
-              fontSize: 24,
+              width: 56, height: 56,
+              background: '#C8FF00', color: '#0A0A0A', fontSize: 24,
               boxShadow: '0 4px 20px rgba(200,255,0,0.3)',
-              cursor: 'pointer',
-              border: 'none',
+              cursor: 'pointer', border: 'none',
             }}
             title="Поддержка"
           >
@@ -272,7 +235,6 @@ export default function DashboardRoute() {
         </div>
       </div>
 
-      {/* ══════════ CHANGELOG MODAL ══════════ */}
       <ChangelogModal
         isOpen={changelogOpen}
         onClose={() => { setChangelogOpen(false); setHasNewChangelog(false); }}
