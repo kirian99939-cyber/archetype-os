@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react';
 import type { AnalyzeResponse, NewHypothesis, RecommendV2Response, HybridArchetype } from '@/app/api/analyze/route';
 import { ARCHETYPES } from '@/lib/archetypes';
 import AnimatedLogo from '@/components/AnimatedLogo';
+import LoadingMessages from '@/components/LoadingMessages';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -76,22 +77,6 @@ const AD_PLATFORMS = [
 
 const STEP_LABELS = ['Бриф', 'Архетип', 'Гипотезы', 'Баннеры'];
 
-const LOADING_PHRASES = [
-  'Анализируем психотип аудитории...',
-  'Подбираем визуальную стратегию...',
-  'Настраиваем композицию и цвет...',
-  'Генерируем уникальный креатив...',
-  'Прокачиваем CTR на +37%...',
-  'Добавляем щепотку нейромагии...',
-  'Уговариваем нейросеть постараться...',
-  'Дизайнер бы делал это 4 часа...',
-  'Проверяем, чтобы было огненно...',
-  'Настраиваем эмоциональные крючки...',
-  'Подключаем архетип к визуалу...',
-  'Ещё чуть-чуть, почти шедевр...',
-  'Полируем пиксели до блеска...',
-  'Заряжаем баннер на конверсию...',
-];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -197,7 +182,6 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
   const [bannerHistory, setBannerHistory] = useState<any[]>([]);
   const [showingHistory, setShowingHistory] = useState(false);
   const [historyTab, setHistoryTab] = useState(0);
-  const [loadingPhrase, setLoadingPhrase] = useState(0);
   const [selectedFormats, setSelectedFormats] = useState<Set<string>>(
     new Set(BANNER_FORMATS.map(f => f.key))
   );
@@ -1035,13 +1019,6 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
   const anyBannerLoading = bannerGroups.some(g => g.banners.some(b => b.loading));
   const activeBannerGroup = bannerGroups[activeBannerTab] ?? null;
 
-  useEffect(() => {
-    if (!anyBannerLoading) return;
-    const interval = setInterval(() => {
-      setLoadingPhrase(prev => (prev + 1) % LOADING_PHRASES.length);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [anyBannerLoading]);
 
   useEffect(() => {
     onBusyChange?.(anyBannerLoading);
@@ -1685,17 +1662,9 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
           </div>
 
           {hypothesesLoading ? (
-            <div className="glass-card p-12 text-center flex flex-col items-center">
-              <div className="mb-4">
-                <AnimatedLogo size={56} inline />
-              </div>
-              <p className="text-white/60 text-sm mb-1">
-                Генерируем гипотезы под архетип&nbsp;
-                <span style={{ color: ACCENT }}>
-                  {selectedArchetypes.map(a => ARCHETYPES.find(d => d.id === a.id)?.label ?? a.id).join(', ')}
-                </span>
-              </p>
-              <p className="text-white/25 text-xs">Обычно занимает 10–20 секунд</p>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 40 }}>
+              <AnimatedLogo size={64} inline />
+              <LoadingMessages intervalMs={3000} />
             </div>
           ) : hypothesesError ? (
             <div className="glass-card p-10 text-center">
@@ -2035,24 +2004,22 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
                     )}
                     {/* Overlay спиннер при рефреше поверх изображения */}
                     {banner.loading && banner.imageUrl && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <div
-                          className="w-8 h-8 rounded-full border-2 animate-spin"
-                          style={{ borderColor: ACCENT, borderTopColor: 'transparent' }}
-                        />
-                        <span className="text-white/60 text-xs mt-2">Генерируем новый вариант...</span>
+                      <div className="absolute inset-0" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 40, background: 'rgba(0,0,0,0.5)' }}>
+                        <AnimatedLogo size={48} inline />
+                        <LoadingMessages intervalMs={3000} />
                       </div>
                     )}
                     {/* Спиннер при первичной генерации (нет imageUrl) */}
                     {banner.loading && !banner.imageUrl && banner.taskId && (
-                      <div className="flex flex-col items-center gap-2 p-4">
-                        <AnimatedLogo size={40} inline />
-                        <span className="text-white/30 text-xs mt-1">Генерируется... (1-2 мин)</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 40 }}>
+                        <AnimatedLogo size={64} inline />
+                        <LoadingMessages intervalMs={3000} />
                       </div>
                     )}
                     {banner.loading && !banner.imageUrl && !banner.taskId && (
-                      <div className="flex flex-col items-center gap-2 p-4">
-                        <span className="text-white/20 text-xs">⏳ В очереди</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 40 }}>
+                        <AnimatedLogo size={48} inline />
+                        <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>В очереди...</span>
                       </div>
                     )}
                     {!banner.loading && !banner.imageUrl && !banner.error && (
