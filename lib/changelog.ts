@@ -10,6 +10,24 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.5.0',
+    date: '2026-02-28',
+    title: 'Большое обновление',
+    items: [
+      { type: 'feature', text: 'Новая система кредитов — 10 кредитов за действие' },
+      { type: 'feature', text: 'Обновлённые тарифы: Старт, Про, Бизнес' },
+      { type: 'feature', text: 'Реферальная программа — приглашай друзей, получай кредиты' },
+      { type: 'feature', text: 'Tone of Voice — выбирай стиль общения в брифе' },
+      { type: 'feature', text: 'Два новых архетипа: Соблазн и Чёрный ящик' },
+      { type: 'feature', text: 'Умные safe zones — текст не попадает под кнопки соцсетей' },
+      { type: 'feature', text: 'AI сам решает, где использовать ваше фото' },
+      { type: 'improvement', text: 'Анимированный логотип при загрузке' },
+      { type: 'improvement', text: 'Весёлые надписи при генерации баннеров' },
+      { type: 'improvement', text: 'Подсказки в полях УТП и Оффер' },
+      { type: 'fix', text: 'Текст больше не дублируется на баннерах' },
+    ],
+  },
+  {
     version: '1.4.0',
     date: '2026-02-28',
     title: 'Умные баннеры и Tone of Voice',
