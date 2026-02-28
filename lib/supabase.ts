@@ -15,7 +15,7 @@ const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY!;
  *   email       TEXT        UNIQUE NOT NULL
  *   name        TEXT
  *   avatar_url  TEXT        ← колонка называется avatar_url, не image!
- *   credits     INTEGER     DEFAULT 30
+ *   credits     INTEGER     DEFAULT 100
  *   created_at  TIMESTAMPTZ DEFAULT NOW()
  */
 export const supabaseAdmin = createClient(supabaseUrl, supabaseSecretKey);

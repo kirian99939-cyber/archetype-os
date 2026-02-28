@@ -58,7 +58,7 @@ export const authOptions: NextAuthOptions = {
               email: user.email,
               name:  user.name  ?? null,
               avatar_url: user.image ?? null,
-              credits: 30,
+              credits: 100,
             })
             .select('id, credits')
             .single();

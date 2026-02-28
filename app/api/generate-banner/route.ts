@@ -245,7 +245,7 @@ export async function POST(req: NextRequest) {
           email:      token.email as string,
           name:       (token.name as string) ?? null,
           avatar_url: (token.picture as string) ?? null,
-          credits:    30,
+          credits:    100,
         })
         .select('id, credits')
         .single();

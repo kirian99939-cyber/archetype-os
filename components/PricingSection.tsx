@@ -16,15 +16,15 @@ const PLANS = [
   {
     id: 'free',
     name: 'Free',
-    description: 'Попробуйте бесплатно',
-    credits: 30,
+    description: 'Попробуйте бесплатно — хватит на 1 полный проект',
+    credits: 100,
     price: 0,
     oldPrice: null,
     perCredit: null,
     badge: null,
     highlighted: false,
     features: [
-      { text: '1 проект (частичный)', included: true },
+      { text: '1 полный проект', included: true },
       { text: 'Анализ архетипов', included: true },
       { text: '26 архетипов', included: true },
       { text: 'AI-анализ бренда', included: true },
