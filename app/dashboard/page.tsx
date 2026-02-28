@@ -121,9 +121,9 @@ export default function DashboardRoute() {
         </div>
 
         <div className="px-4 py-3 border-b border-white/10">
-          <p className="text-white/40 text-xs mb-1">Кредитов</p>
+          <p className="text-white/40 text-xs mb-1">🪙 Кредитов</p>
           <p className="font-bold text-lg" style={{ color: 'var(--accent)' }}>
-            {credits}
+            {credits.toLocaleString('ru-RU')}
           </p>
         </div>
 
@@ -187,8 +187,8 @@ export default function DashboardRoute() {
               className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg"
               style={{ background: 'rgba(200,255,0,0.1)', color: 'var(--accent)' }}
             >
-              <span>⚡</span>
-              <span>{credits} кредитов</span>
+              <span>🪙</span>
+              <span>{credits.toLocaleString('ru-RU')} кр.</span>
             </div>
 
             <div className="flex items-center gap-2">

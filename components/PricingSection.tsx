@@ -16,64 +16,61 @@ const PLANS = [
   {
     id: 'free',
     name: 'Free',
-    description: 'Попробовать сервис',
-    credits: 3,
+    description: 'Попробуйте бесплатно',
+    credits: 30,
     price: 0,
     oldPrice: null,
     perCredit: null,
     badge: null,
     highlighted: false,
     features: [
+      { text: '1 проект (частичный)', included: true },
+      { text: 'Анализ архетипов', included: true },
       { text: '26 архетипов', included: true },
       { text: 'AI-анализ бренда', included: true },
-      { text: '3 формата баннеров', included: true },
-      { text: 'История проектов', included: true },
       { text: 'Приоритетная генерация', included: false },
-      { text: 'До 5 архетипов на проект', included: false },
       { text: 'Поддержка в Telegram', included: false },
-      { text: 'Ранний доступ к фичам', included: false },
     ],
     cta: 'Начать бесплатно',
   },
   {
     id: 'start',
     name: 'Старт',
-    description: 'Для фрилансеров и SMM',
-    credits: 5,
-    price: 1490,
-    oldPrice: 2990,
-    perCredit: 298,
+    description: 'Для малого бизнеса',
+    credits: 400,
+    price: 1990,
+    oldPrice: null,
+    perCredit: null,
     badge: null,
     highlighted: false,
     features: [
+      { text: '~4 полных проекта', included: true },
       { text: '26 архетипов', included: true },
       { text: 'AI-анализ бренда', included: true },
-      { text: '3 формата баннеров', included: true },
-      { text: 'История проектов', included: true },
+      { text: '6 форматов баннеров', included: true },
       { text: 'Скачивание в HD', included: true },
-      { text: 'До 3 архетипов на проект', included: true },
+      { text: 'История проектов', included: true },
       { text: 'Поддержка в Telegram', included: false },
-      { text: 'Ранний доступ к фичам', included: false },
     ],
     cta: 'Выбрать Старт',
   },
   {
     id: 'pro',
     name: 'Про',
-    description: 'Для маркетологов и агентств',
-    credits: 20,
-    price: 4990,
-    oldPrice: 9990,
-    perCredit: 250,
+    description: 'Для агентств и маркетологов',
+    credits: 1500,
+    price: 6990,
+    oldPrice: null,
+    perCredit: null,
     badge: 'ЛУЧШИЙ ВЫБОР',
     highlighted: true,
     features: [
+      { text: '~16 проектов', included: true },
       { text: '26 архетипов', included: true },
       { text: 'AI-анализ бренда', included: true },
-      { text: '3 формата баннеров', included: true },
-      { text: 'История проектов', included: true },
+      { text: '6 форматов баннеров', included: true },
       { text: 'Скачивание в HD', included: true },
-      { text: 'До 5 архетипов на проект', included: true },
+      { text: 'История проектов', included: true },
       { text: 'Приоритетная генерация', included: true },
       { text: 'Поддержка в Telegram', included: true },
     ],
@@ -82,20 +79,20 @@ const PLANS = [
   {
     id: 'business',
     name: 'Бизнес',
-    description: 'Для команд и продакшн',
-    credits: 50,
-    price: 9990,
-    oldPrice: 24990,
-    perCredit: 200,
+    description: 'Максимум возможностей',
+    credits: 3000,
+    price: 12990,
+    oldPrice: null,
+    perCredit: null,
     badge: 'ДЛЯ КОМАНД',
     highlighted: false,
     features: [
+      { text: '~33 проекта', included: true },
       { text: '26 архетипов', included: true },
       { text: 'AI-анализ бренда', included: true },
-      { text: '3 формата баннеров', included: true },
-      { text: 'История проектов', included: true },
+      { text: '6 форматов баннеров', included: true },
       { text: 'Скачивание в HD', included: true },
-      { text: 'До 5 архетипов на проект', included: true },
+      { text: 'История проектов', included: true },
       { text: 'Приоритетная генерация', included: true },
       { text: 'Поддержка в Telegram', included: true },
       { text: 'Ранний доступ к фичам', included: true },
@@ -171,8 +168,8 @@ export default function PricingSection({ isLoggedIn, onSelectPlan }: PricingSect
           Тарифы
         </h2>
         <p className="text-sm mx-auto" style={{ color: 'var(--text-muted)', maxWidth: 480, lineHeight: 1.65 }}>
-          1 кредит = 1 проект с полным пакетом баннеров.<br />
-          Дизайнер берёт от 5 000 ₽ за то же самое.
+          10 кредитов = 1 гипотеза или 1 баннер.<br />
+          Анализ архетипов — бесплатно.
         </p>
       </div>
 
@@ -222,15 +219,11 @@ export default function PricingSection({ isLoggedIn, onSelectPlan }: PricingSect
               </div>
 
               {/* Per credit */}
-              {plan.perCredit ? (
-                <p className="text-white/30 text-xs mb-4">
-                  {formatPrice(plan.perCredit)} ₽ за кредит
-                </p>
-              ) : (
-                <p className="text-white/30 text-xs mb-4">
-                  {plan.credits} кредита при регистрации
-                </p>
-              )}
+              <p className="text-white/30 text-xs mb-4">
+                {plan.price === 0
+                  ? `${plan.credits} кредитов при регистрации`
+                  : `${plan.credits} кредитов`}
+              </p>
 
               {/* CTA */}
               <button

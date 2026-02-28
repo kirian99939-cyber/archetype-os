@@ -6,9 +6,9 @@ const PRODAMUS_SECRET = process.env.PRODAMUS_SECRET_KEY!;
 
 /** Маппинг суммы оплаты → количество кредитов */
 const PRICE_TO_CREDITS: Record<number, number> = {
-  1490: 5,    // Старт
-  4990: 20,   // Про
-  9990: 50,   // Бизнес
+  1990: 400,     // Старт
+  6990: 1500,    // Про
+  12990: 3000,   // Бизнес
 };
 
 /**

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { getToken } from 'next-auth/jwt';
-import { supabaseAdmin, spendCredit } from '@/lib/supabase';
+import { supabaseAdmin, spendCredits } from '@/lib/supabase';
 import { ARCHETYPES, type TextRules } from '@/lib/archetypes';
 
 export interface GenerateBannerRequest {
@@ -15,8 +15,6 @@ export interface GenerateBannerRequest {
   imageUrls?: string[];
   /** Tone of voice for text generation */
   toneOfVoice?: string;
-  /** true только для первого запроса в пакете — списывает 1 кредит */
-  isFirstBanner?: boolean;
 }
 
 export interface GenerateBannerResponse {
@@ -247,7 +245,7 @@ export async function POST(req: NextRequest) {
           email:      token.email as string,
           name:       (token.name as string) ?? null,
           avatar_url: (token.picture as string) ?? null,
-          credits:    3,
+          credits:    30,
         })
         .select('id, credits')
         .single();
@@ -258,16 +256,17 @@ export async function POST(req: NextRequest) {
       dbUser = newUser;
     }
 
-    // Проверяем баланс ПЕРЕД любым вызовом NanoBanana
-    if (dbUser.credits <= 0) {
-      return NextResponse.json({ error: 'NO_CREDITS' }, { status: 403 });
+    // Проверяем баланс ПЕРЕД любым вызовом NanoBanana (нужно минимум 10 кредитов)
+    if (dbUser.credits < 10) {
+      return NextResponse.json({ error: 'NO_CREDITS', required: 10, available: dbUser.credits }, { status: 402 });
     }
 
-    // Списываем кредит только за первый баннер в пакете
-    if (body.isFirstBanner) {
-      await spendCredit(dbUser.id);
-      console.log(`[Credits] Spent 1 credit for user ${dbUser.id}. Remaining: ${dbUser.credits - 1}`);
+    // Списываем 10 кредитов за каждый баннер
+    const spent = await spendCredits(dbUser.id, 10);
+    if (!spent) {
+      return NextResponse.json({ error: 'NO_CREDITS', required: 10, available: dbUser.credits }, { status: 402 });
     }
+    console.log(`[Credits] Spent 10 credits for user ${dbUser.id}. Was: ${dbUser.credits}, now: ${dbUser.credits - 10}`);
 
     // Генерируем текст через Claude если есть textRules для архетипа
     let bannerText: BannerText | null = null;

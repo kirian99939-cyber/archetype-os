@@ -479,6 +479,23 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
     setHypothesesLoading(true);
     setHypothesesError(null);
     try {
+      // Подсчёт: каждый архетип даёт 1 гипотезу + каждый гибрид даёт 1 гипотезу
+      const totalHypotheses = archetypes.length + selectedHybrids.length;
+      const requiredCredits = totalHypotheses * 10;
+
+      // Проверяем кредиты ПЕРЕД генерацией
+      try {
+        const creditsRes = await fetch('/api/check-credits');
+        if (creditsRes.ok) {
+          const { credits } = await creditsRes.json();
+          if (credits < requiredCredits) {
+            setHypothesesError(`Недостаточно кредитов. Нужно ${requiredCredits}, у вас ${credits}. Купите больше кредитов.`);
+            setHypothesesLoading(false);
+            return;
+          }
+        }
+      } catch {}
+
       const allHypotheses: NewHypothesis[] = [];
 
       // 1. Чистые архетипы → generate-hypotheses (по 1 гипотезе)
@@ -553,6 +570,19 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
       }
 
       setHypotheses(allHypotheses);
+
+      // Списываем кредиты за сгенерированные гипотезы (10 за каждую)
+      if (allHypotheses.length > 0) {
+        const spendAmount = allHypotheses.length * 10;
+        try {
+          await fetch('/api/spend-credits', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: spendAmount }),
+          });
+        } catch {}
+      }
+
       const hybridsKey = selectedHybrids.map(h => h.archetypes.join('×')).sort().join(',');
       lastHypothesesArchetype.current = archetypes.map(a => a.id).sort().join(',') + '|' + hybridsKey;
       setSelectedHypotheses(new Set(Array.from({ length: Math.min(allHypotheses.length, 10) }, (_, i) => i)));
@@ -717,24 +747,27 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
   };
 
   const handleGenerateBanners = async () => {
+    // Подсчёт стоимости: каждый баннер = 10 кредитов
+    const selectedList = Array.from(selectedHypotheses).sort((a, b) => a - b);
+    const activeFormatsCount = BANNER_FORMATS.filter(f => selectedFormats.has(f.key)).length;
+    const totalBanners = selectedList.length * activeFormatsCount;
+    const requiredCredits = totalBanners * 10;
+
     // Предварительная проверка кредитов до запуска генерации
     try {
       const creditsRes = await fetch('/api/check-credits');
       if (creditsRes.ok) {
         const { credits } = await creditsRes.json();
-        if (credits <= 0) {
+        if (credits < requiredCredits) {
           setShowNoCreditsModal(true);
           return;
         }
       } else if (creditsRes.status === 401) {
-        return; // не авторизован — ничего не делаем
+        return;
       }
-    } catch {
-      // сетевая ошибка — продолжаем, сервер сам проверит
-    }
+    } catch {}
 
     const archetype = (selectedArchetypes[0]?.id || analyzeResult?.primaryArchetype || '').toLowerCase();
-    const selectedList = Array.from(selectedHypotheses).sort((a, b) => a - b);
 
     const initialGroups: BannerGroup[] = selectedList.map(idx => ({
       hypothesisIndex: idx,
@@ -764,7 +797,6 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
 
       for (let fmtIndex = 0; fmtIndex < activeFormats.length; fmtIndex++) {
         const fmt = activeFormats[fmtIndex];
-        const isFirstBanner = groupIndex === 0 && fmtIndex === 0;
 
         const briefImageUrls: string[] =
           brief.visualMode === 'upload' && brief.imageUrls.length > 0
@@ -788,12 +820,11 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
               archetype,
               offer: brief.offer || undefined,
               toneOfVoice: brief.toneOfVoice || undefined,
-              isFirstBanner,
               imageUrls: imageUrlsToSend,
             }),
           });
 
-          if (res.status === 403) {
+          if (res.status === 402 || res.status === 403) {
             setShowNoCreditsModal(true);
             setBannerGroups(prev =>
               prev.map((g, gi) =>
@@ -887,6 +918,18 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
     const banner = group.banners.find(b => b.key === fmtKey);
     if (!banner || banner.loading || banner.refreshCount >= MAX_REFRESHES_PER_BANNER) return;
 
+    // Проверяем кредиты перед рефрешем (10 кредитов)
+    try {
+      const creditsRes = await fetch('/api/check-credits');
+      if (creditsRes.ok) {
+        const { credits } = await creditsRes.json();
+        if (credits < 10) {
+          setShowNoCreditsModal(true);
+          return;
+        }
+      }
+    } catch {}
+
     const archetype = (selectedArchetypes[0]?.id || analyzeResult?.primaryArchetype || '').toLowerCase();
     const hypothesis = hypotheses[group.hypothesisIndex];
     const basePrompt = [
@@ -946,12 +989,11 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
           archetype,
           offer: brief.offer || undefined,
           toneOfVoice: brief.toneOfVoice || undefined,
-          isFirstBanner: false, // рефреш не списывает кредит
           imageUrls: imageUrlsToSend,
         }),
       });
 
-      if (res.status === 403) {
+      if (res.status === 402 || res.status === 403) {
         setShowNoCreditsModal(true);
         setBannerGroups(prev =>
           prev.map((g, gi) =>
@@ -1636,6 +1678,9 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <h2 className="text-white font-semibold text-xl">Маркетинговые гипотезы</h2>
+              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
+                Стоимость: {(selectedArchetypes.length + selectedHybrids.length)} × 10 = {(selectedArchetypes.length + selectedHybrids.length) * 10} кр.
+              </span>
               {selectedArchetypes.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-2">
                   {selectedArchetypes.map(a => {
@@ -1826,15 +1871,22 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
                 {selectedHypotheses.size} {selectedHypotheses.size === 1 ? 'гипотеза' : 'гипотезы'} · {BANNER_FORMATS.filter(f => selectedFormats.has(f.key)).map(f => f.label).join(' · ')}
               </p>
             </div>
-            <button
-              onClick={handleGenerateBanners}
-              disabled={anyBannerLoading}
-              className="btn-primary flex items-center gap-2 shrink-0"
-            >
-              {anyBannerLoading
-                ? <><Spinner />Генерируем...</>
-                : '⚡ Сгенерировать баннеры'}
-            </button>
+            <div className="flex flex-col items-end gap-1 shrink-0">
+              <button
+                onClick={handleGenerateBanners}
+                disabled={anyBannerLoading}
+                className="btn-primary flex items-center gap-2"
+              >
+                {anyBannerLoading
+                  ? <><Spinner />Генерируем...</>
+                  : '⚡ Сгенерировать баннеры'}
+              </button>
+              {!anyBannerLoading && (
+                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
+                  Стоимость: {selectedHypotheses.size * BANNER_FORMATS.filter(f => selectedFormats.has(f.key)).length} × 10 = {selectedHypotheses.size * BANNER_FORMATS.filter(f => selectedFormats.has(f.key)).length * 10} кр.
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Быстрый выбор по площадке */}
@@ -2068,6 +2120,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
                       }
                     >
                       🔄{banner.refreshCount > 0 && <span className="text-[10px]">{banner.refreshCount}/{MAX_REFRESHES_PER_BANNER}</span>}
+                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>10 кр</span>
                     </button>
                     {banner.imageUrl && (
                       <a
@@ -2231,10 +2284,10 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
             >
               <span style={{ fontSize: '1.5rem' }}>⚡</span>
             </div>
-            <h3 className="text-white font-bold text-lg mb-2">Кредиты закончились</h3>
+            <h3 className="text-white font-bold text-lg mb-2">Недостаточно кредитов</h3>
             <p className="text-white/50 text-sm leading-relaxed mb-6">
-              У вас не осталось кредитов для генерации баннеров.<br />
-              Напишите нам — мы пополним баланс.
+              Недостаточно кредитов для этого действия.<br />
+              Купите больше кредитов чтобы продолжить.
             </p>
             <div className="flex flex-col gap-3">
               <a

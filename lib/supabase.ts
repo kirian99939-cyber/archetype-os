@@ -15,7 +15,7 @@ const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY!;
  *   email       TEXT        UNIQUE NOT NULL
  *   name        TEXT
  *   avatar_url  TEXT        ← колонка называется avatar_url, не image!
- *   credits     INTEGER     DEFAULT 3
+ *   credits     INTEGER     DEFAULT 30
  *   created_at  TIMESTAMPTZ DEFAULT NOW()
  */
 export const supabaseAdmin = createClient(supabaseUrl, supabaseSecretKey);
@@ -36,10 +36,10 @@ export async function getCredits(userId: string): Promise<number> {
 }
 
 /**
- * Списывает 1 кредит у пользователя.
- * Возвращает true если списание прошло успешно, false если кредитов нет или ошибка.
+ * Списывает указанное количество кредитов у пользователя.
+ * Возвращает true если списание прошло успешно, false если кредитов недостаточно или ошибка.
  */
-export async function spendCredit(userId: string): Promise<boolean> {
+export async function spendCredits(userId: string, amount: number): Promise<boolean> {
   // Атомарно: читаем текущий баланс и списываем с optimistic lock
   const { data, error } = await supabaseAdmin
     .from('users')
@@ -47,12 +47,12 @@ export async function spendCredit(userId: string): Promise<boolean> {
     .eq('id', userId)
     .single();
 
-  if (error || !data || data.credits <= 0) return false;
+  if (error || !data || data.credits < amount) return false;
 
   // Optimistic lock: обновляем ТОЛЬКО если credits не изменился с момента чтения
   const { data: updated, error: updateError } = await supabaseAdmin
     .from('users')
-    .update({ credits: data.credits - 1 })
+    .update({ credits: data.credits - amount })
     .eq('id', userId)
     .eq('credits', data.credits)
     .select('credits')
