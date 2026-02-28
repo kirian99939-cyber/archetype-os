@@ -13,6 +13,7 @@ import HistoryPage from '@/components/HistoryPage';
 import PricingSection from '@/components/PricingSection';
 import BannerLibraryPage from '@/components/BannerLibraryPage';
 import AdminPage from '@/components/AdminPage';
+import ReferralDashboard from '@/components/ReferralDashboard';
 import ChangelogModal, { hasUnseenChangelog } from '@/components/ChangelogModal';
 
 type Page =
@@ -22,6 +23,7 @@ type Page =
   | 'history'
   | 'analytics'
   | 'banner-library'
+  | 'referrals'
   | 'pricing'
   | 'settings'
   | 'admin';
@@ -33,6 +35,7 @@ const NAV_ITEMS: { id: Page; label: string; icon: string }[] = [
   { id: 'history',     label: 'История генераций',  icon: '◷' },
   { id: 'analytics',   label: 'Аналитика',          icon: '↗' },
   { id: 'banner-library' as Page, label: 'Все баннеры', icon: '📚' },
+  { id: 'referrals' as Page, label: 'Рефералы', icon: '🎁' },
   { id: 'pricing' as Page, label: 'Тарифы', icon: '⚡' },
   { id: 'settings',    label: 'Настройки',          icon: '⚙' },
 ];
@@ -51,6 +54,7 @@ export default function DashboardRoute() {
   const [pendingNav, setPendingNav] = useState<Page | null>(null);
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [hasNewChangelog, setHasNewChangelog] = useState(false);
+  const [referralCount, setReferralCount] = useState(0);
   const isAdmin = ADMIN_EMAILS.includes(session?.user?.email || '');
 
   const navItems = [
@@ -69,6 +73,16 @@ export default function DashboardRoute() {
     if (status === 'authenticated' && hasUnseenChangelog()) {
       setHasNewChangelog(true);
       setChangelogOpen(true);
+    }
+  }, [status]);
+
+  // Fetch referral count for badge
+  useEffect(() => {
+    if (status === 'authenticated') {
+      fetch('/api/referral/stats')
+        .then(res => res.json())
+        .then(data => { if (data.totalReferrals) setReferralCount(data.totalReferrals); })
+        .catch(() => {});
     }
   }, [status]);
 
@@ -148,6 +162,14 @@ export default function DashboardRoute() {
               >
                 <span className="w-4 text-center shrink-0">{item.icon}</span>
                 <span className="leading-tight">{item.label}</span>
+                {item.id === 'referrals' && referralCount > 0 && (
+                  <span
+                    className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none"
+                    style={{ background: ACCENT, color: '#0A0A0A' }}
+                  >
+                    {referralCount}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -226,6 +248,7 @@ export default function DashboardRoute() {
           {activePage === 'new-project' && <NewProject onBusyChange={setBannersBusy} />}
           {activePage === 'analytics'   && <AnalyticsPage />}
           {activePage === 'banner-library' && <BannerLibraryPage />}
+          {activePage === 'referrals' && <ReferralDashboard />}
           {activePage === 'pricing'    && (
             <div className="max-w-5xl mx-auto">
               <PricingSection
