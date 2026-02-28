@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import { ARCHETYPES } from '@/lib/archetypes';
 import { BANNER_FORMATS } from '@/lib/project-types';
 import type { ProjectData, BannerGroup } from '@/lib/project-types';
 import { useBannerGeneration, MAX_REFRESHES_PER_BANNER } from '@/hooks/useBannerGeneration';
 import type { NewHypothesis } from '@/app/api/analyze/route';
+import type { ArchetypeDefinition } from '@/lib/archetypes';
 import AnimatedLogo from '@/components/AnimatedLogo';
 import LoadingMessages from '@/components/LoadingMessages';
 
@@ -38,33 +39,39 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
     visualMode: 'ai' as const, imageUrls: [], imageLink: '',
   };
 
-  const hypotheses: NewHypothesis[] = (project.hypotheses ?? []) as NewHypothesis[];
-  const allHypothesesSet = new Set(hypotheses.map((_, i) => i));
+  // ── Мутабельное локальное состояние ──
+  const [localArchetypes, setLocalArchetypes] = useState(() =>
+    project.archetypes?.map((a, i) => ({ id: a.id as string, rank: i + 1 }))
+    ?? (project.archetype?.id ? [{ id: project.archetype.id as string, rank: 1 }] : [])
+  );
+  const [localHypotheses, setLocalHypotheses] = useState<NewHypothesis[]>(
+    (project.hypotheses ?? []) as NewHypothesis[]
+  );
+
+  const allHypothesesSet = new Set(localHypotheses.map((_, i) => i));
   const selectedFormats = new Set(BANNER_FORMATS.map(f => f.key));
 
-  const selectedArchetypes = project.archetypes
-    ? project.archetypes.map((a, i) => ({ id: a.id, rank: i + 1 }))
-    : project.archetype?.id
-    ? [{ id: project.archetype.id, rank: 1 }]
-    : [];
+  const [showArchetypePicker, setShowArchetypePicker] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const {
     bannerGroups, setBannerGroups,
-    activeBannerTab,
+    activeBannerTab, setActiveBannerTab,
     isSwitchingTab,
     anyBannerLoading,
     showNoCreditsModal, setShowNoCreditsModal,
     activeBannerGroup,
     handleGenerateBanners,
+    generateForSingleHypothesis,
     handleRefreshBanner,
     handleDownload,
     switchTab,
   } = useBannerGeneration({
     brief,
-    hypotheses,
+    hypotheses: localHypotheses,
     selectedHypotheses: allHypothesesSet,
     selectedFormats,
-    selectedArchetypes,
+    selectedArchetypes: localArchetypes,
     analyzeResult: null,
     projectIdRef,
   });
@@ -87,13 +94,101 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
         previousVersions: b.previousVersions ?? [],
       })),
     }));
-    // Use setTimeout to avoid setting state during render
     setTimeout(() => setBannerGroups(restored), 0);
   }
 
-  const archDefs = selectedArchetypes
+  const archDefs = localArchetypes
     .map(a => ARCHETYPES.find(d => d.id === a.id))
-    .filter(Boolean);
+    .filter(Boolean) as ArchetypeDefinition[];
+
+  // ── Группировка гипотез по архетипам ──
+  const hypothesesByArchetype = useMemo(() => {
+    const groups: Record<string, { archDef: ArchetypeDefinition | undefined; items: { h: NewHypothesis; index: number }[] }> = {};
+    localHypotheses.forEach((h, i) => {
+      const key = h.archetypeId || '_none';
+      if (!groups[key]) {
+        groups[key] = { archDef: ARCHETYPES.find(a => a.id === h.archetypeId), items: [] };
+      }
+      groups[key].items.push({ h, index: i });
+    });
+    return groups;
+  }, [localHypotheses]);
+
+  // ── handleAddHypothesis — генерация одной гипотезы ──
+  const handleAddHypothesis = useCallback(async (archetypeId: string) => {
+    setGenerating(true);
+    try {
+      const archDef = ARCHETYPES.find(a => a.id === archetypeId);
+      const rank = localArchetypes.findIndex(a => a.id === archetypeId) + 1;
+
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'generate-hypotheses',
+          selectedArchetypes: [{ id: archetypeId, label: archDef?.label || archetypeId, rank }],
+          product: brief.product,
+          price: brief.price,
+          audience: brief.audience,
+          goal: brief.goal,
+          utp: brief.utp,
+          offer: brief.offer,
+          toneOfVoice: brief.toneOfVoice,
+          platforms: brief.platforms,
+          context: brief.context,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.newHypotheses?.length) {
+        const newHyps = [...localHypotheses, ...data.newHypotheses];
+        setLocalHypotheses(newHyps);
+
+        // Сохранить в БД
+        await fetch(`/api/projects/${project.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hypotheses: newHyps }),
+        });
+
+        setActiveTab('hypotheses');
+      }
+    } catch (err) {
+      console.error('Failed to generate hypothesis:', err);
+    } finally {
+      setGenerating(false);
+    }
+  }, [localArchetypes, localHypotheses, brief, project.id]);
+
+  // ── handlePickArchetype — выбрать новый архетип и сразу сгенерить гипотезу ──
+  const handlePickArchetype = useCallback(async (archetypeId: string) => {
+    setShowArchetypePicker(false);
+
+    const newArchetypes = [...localArchetypes, { id: archetypeId, rank: localArchetypes.length + 1 }];
+    setLocalArchetypes(newArchetypes);
+
+    // Сохранить архетипы в БД
+    const archPayload = newArchetypes.map(a => {
+      const def = ARCHETYPES.find(d => d.id === a.id);
+      return { id: a.id, label: def?.label || a.id };
+    });
+    await fetch(`/api/projects/${project.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ archetypes: archPayload }),
+    });
+
+    // Сгенерировать гипотезу для нового архетипа
+    handleAddHypothesis(archetypeId);
+  }, [localArchetypes, project.id, handleAddHypothesis]);
+
+  // ── handleGenerateBannersForHypothesis ──
+  const handleGenerateBannersForHypothesis = useCallback(async (hypIndex: number) => {
+    const hyp = localHypotheses[hypIndex];
+    if (!hyp) return;
+    setActiveTab('banners');
+    await generateForSingleHypothesis(hypIndex, hyp);
+  }, [localHypotheses, generateForSingleHypothesis]);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -131,6 +226,17 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
         })}
       </div>
 
+      {/* Generating overlay */}
+      {generating && (
+        <div className="glass-card p-6 flex items-center gap-4">
+          <AnimatedLogo size={32} inline />
+          <div>
+            <p className="text-white font-medium text-sm">Генерируем гипотезу...</p>
+            <p className="text-white/40 text-xs">Это займёт несколько секунд</p>
+          </div>
+        </div>
+      )}
+
       {/* ═══════════ TAB: BRIEF ═══════════ */}
       {activeTab === 'brief' && project.brief && (
         <div className="glass-card p-6 space-y-4">
@@ -165,97 +271,146 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
       {activeTab === 'archetypes' && (
         <div className="space-y-4">
           <h3 className="text-white font-semibold text-lg">Выбранные архетипы</h3>
-          {archDefs.length === 0 ? (
-            <div className="glass-card p-8 text-center">
-              <p className="text-white/35 text-sm">Архетипы не выбраны</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {archDefs.map((def, i) => (
-                <div
-                  key={def!.id}
-                  className="glass-card p-5 space-y-3"
-                  style={{ border: i === 0 ? `1px solid ${ACCENT_BORDER}` : undefined }}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl">{def!.icon}</span>
-                    <div>
-                      <p className="text-white font-semibold text-sm">{def!.label}</p>
-                      <p className="text-white/30 text-xs">{i === 0 ? 'Основной' : `#${i + 1}`}</p>
-                    </div>
-                  </div>
-                  <p className="text-white/50 text-xs leading-relaxed">{def!.audience}</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {def!.tags.map(tag => (
-                      <span
-                        key={tag}
-                        className="text-[10px] px-2 py-0.5 rounded-full"
-                        style={{ background: ACCENT_BG, color: ACCENT, border: `1px solid ${ACCENT_BORDER}` }}
-                      >
-                        {tag}
-                      </span>
-                    ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {archDefs.map((def, i) => (
+              <div
+                key={def.id}
+                className="glass-card p-5 space-y-3"
+                style={{ border: i === 0 ? `1px solid ${ACCENT_BORDER}` : undefined }}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">{def.icon}</span>
+                  <div>
+                    <p className="text-white font-semibold text-sm">{def.label}</p>
+                    <p className="text-white/30 text-xs">{i === 0 ? 'Основной' : `#${i + 1}`}</p>
                   </div>
                 </div>
-              ))}
+                <p className="text-white/50 text-xs leading-relaxed">{def.audience}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {def.tags.map(tag => (
+                    <span
+                      key={tag}
+                      className="text-[10px] px-2 py-0.5 rounded-full"
+                      style={{ background: ACCENT_BG, color: ACCENT, border: `1px solid ${ACCENT_BORDER}` }}
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            {/* Кнопка "+ Архетип" */}
+            <div
+              onClick={() => setShowArchetypePicker(true)}
+              className="glass-card p-5 flex flex-col items-center justify-center cursor-pointer transition-all hover:border-white/20"
+              style={{ border: '2px dashed rgba(255,255,255,0.15)', minHeight: 160 }}
+            >
+              <span className="text-3xl mb-2" style={{ color: ACCENT }}>+</span>
+              <span className="text-sm" style={{ color: 'rgba(255,255,255,0.5)' }}>Добавить архетип</span>
             </div>
-          )}
+          </div>
         </div>
       )}
 
       {/* ═══════════ TAB: HYPOTHESES ═══════════ */}
       {activeTab === 'hypotheses' && (
-        <div className="space-y-4">
+        <div className="space-y-6">
           <h3 className="text-white font-semibold text-lg">Гипотезы</h3>
-          {hypotheses.length === 0 ? (
+          {localHypotheses.length === 0 ? (
             <div className="glass-card p-8 text-center">
               <p className="text-white/35 text-sm">Гипотезы не сгенерированы</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {hypotheses.map((h, i) => (
-                <div key={i} className="glass-card p-5 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold"
-                      style={{ background: ACCENT, color: '#0A0A0A' }}
-                    >
-                      {i + 1}
-                    </div>
-                    {(h as any).archetypeLabel && (
-                      <span
-                        className="text-[10px] font-medium px-2 py-0.5 rounded-full"
-                        style={{ background: ACCENT_BG, color: ACCENT, border: `1px solid ${ACCENT_BORDER}` }}
-                      >
-                        {(h as any).archetypeLabel}
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-white/30 text-[10px] uppercase tracking-widest mb-0.5">Идея</p>
-                    <p className="text-white text-sm font-medium">{h.idea}</p>
-                  </div>
-                  <div>
-                    <p className="text-white/30 text-[10px] uppercase tracking-widest mb-0.5">Визуал</p>
-                    <p className="text-white/60 text-sm">{h.visual}</p>
-                  </div>
-                  <div>
-                    <p className="text-white/30 text-[10px] uppercase tracking-widest mb-0.5">Заголовок</p>
-                    <p className="text-white text-sm font-semibold">{h.headline}</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <p className="text-white/30 text-[10px] uppercase tracking-widest mb-0.5">CTA</p>
-                      <p className="text-sm font-bold" style={{ color: ACCENT }}>{h.cta}</p>
-                    </div>
-                    <div>
-                      <p className="text-white/30 text-[10px] uppercase tracking-widest mb-0.5">Хук</p>
-                      <p className="text-white/55 text-xs italic">{h.hook}</p>
-                    </div>
-                  </div>
+            Object.entries(hypothesesByArchetype).map(([archetypeId, group]) => (
+              <div key={archetypeId} className="space-y-3">
+                {/* Заголовок группы */}
+                <div className="flex items-center gap-2">
+                  {group.archDef && (
+                    <span className="text-lg">{group.archDef.icon}</span>
+                  )}
+                  <span className="text-white font-medium text-sm">
+                    {group.archDef?.label || 'Без архетипа'}
+                  </span>
+                  <span className="text-white/25 text-xs">
+                    ({group.items.length} {group.items.length === 1 ? 'гипотеза' : group.items.length < 5 ? 'гипотезы' : 'гипотез'})
+                  </span>
                 </div>
-              ))}
-            </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {group.items.map(({ h, index: i }) => {
+                    const hasBanners = bannerGroups.some(g => g.hypothesisIndex === i);
+                    return (
+                      <div key={i} className="glass-card p-5 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold"
+                            style={{ background: ACCENT, color: '#0A0A0A' }}
+                          >
+                            {i + 1}
+                          </div>
+                          {h.archetypeLabel && (
+                            <span
+                              className="text-[10px] font-medium px-2 py-0.5 rounded-full"
+                              style={{ background: ACCENT_BG, color: ACCENT, border: `1px solid ${ACCENT_BORDER}` }}
+                            >
+                              {h.archetypeLabel}
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-white/30 text-[10px] uppercase tracking-widest mb-0.5">Идея</p>
+                          <p className="text-white text-sm font-medium">{h.idea}</p>
+                        </div>
+                        <div>
+                          <p className="text-white/30 text-[10px] uppercase tracking-widest mb-0.5">Визуал</p>
+                          <p className="text-white/60 text-sm">{h.visual}</p>
+                        </div>
+                        <div>
+                          <p className="text-white/30 text-[10px] uppercase tracking-widest mb-0.5">Заголовок</p>
+                          <p className="text-white text-sm font-semibold">{h.headline}</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <p className="text-white/30 text-[10px] uppercase tracking-widest mb-0.5">CTA</p>
+                            <p className="text-sm font-bold" style={{ color: ACCENT }}>{h.cta}</p>
+                          </div>
+                          <div>
+                            <p className="text-white/30 text-[10px] uppercase tracking-widest mb-0.5">Хук</p>
+                            <p className="text-white/55 text-xs italic">{h.hook}</p>
+                          </div>
+                        </div>
+                        {!hasBanners && (
+                          <button
+                            onClick={() => handleGenerateBannersForHypothesis(i)}
+                            disabled={anyBannerLoading}
+                            className="w-full py-2 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-1.5"
+                            style={{ background: ACCENT, color: '#0A0A0A' }}
+                          >
+                            🖼 Сгенерировать баннеры
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* Кнопка "+ Гипотеза" внутри группы */}
+                  {archetypeId !== '_none' && (
+                    <button
+                      onClick={() => handleAddHypothesis(archetypeId)}
+                      disabled={generating}
+                      className="glass-card p-4 flex items-center justify-center gap-2 cursor-pointer transition-all hover:border-white/20"
+                      style={{ border: '2px dashed rgba(255,255,255,0.15)', minHeight: 120 }}
+                    >
+                      {generating ? <AnimatedLogo size={20} inline /> : <span style={{ color: ACCENT }}>+</span>}
+                      <span className="text-sm" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                        Ещё гипотеза · 10 кр
+                      </span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
           )}
         </div>
       )}
@@ -442,6 +597,59 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ═══════════ MODAL: ARCHETYPE PICKER ═══════════ */}
+      {showArchetypePicker && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
+          onClick={() => setShowArchetypePicker(false)}
+        >
+          <div
+            className="glass-card p-6 max-w-3xl w-full max-h-[80vh] overflow-y-auto"
+            style={{ border: `1px solid ${ACCENT_BORDER}` }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-white font-bold text-lg">Выберите архетип</h3>
+              <button
+                onClick={() => setShowArchetypePicker(false)}
+                className="text-white/40 hover:text-white/60 text-xl"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {ARCHETYPES.map(arch => {
+                const alreadySelected = localArchetypes.some(a => a.id === arch.id);
+                return (
+                  <button
+                    key={arch.id}
+                    onClick={() => !alreadySelected && handlePickArchetype(arch.id)}
+                    disabled={alreadySelected}
+                    className="p-3 rounded-xl text-left transition-all"
+                    style={{
+                      background: alreadySelected ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.06)',
+                      border: `1px solid ${alreadySelected ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.1)'}`,
+                      opacity: alreadySelected ? 0.4 : 1,
+                      cursor: alreadySelected ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-lg">{arch.icon}</span>
+                      <span className="text-white text-xs font-medium">{arch.label}</span>
+                    </div>
+                    <p className="text-white/35 text-[10px] leading-tight line-clamp-2">{arch.audience}</p>
+                    {alreadySelected && (
+                      <span className="text-[10px] mt-1 inline-block" style={{ color: ACCENT }}>✓ Выбран</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
 

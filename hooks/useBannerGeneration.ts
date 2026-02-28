@@ -36,6 +36,7 @@ export interface UseBannerGenerationReturn {
   activeBannerGroup: BannerGroup | null;
   bannersSavedRef: React.MutableRefObject<boolean>;
   handleGenerateBanners: () => Promise<void>;
+  generateForSingleHypothesis: (hypothesisIdx: number, hypothesis: NewHypothesis) => Promise<void>;
   handleRefreshBanner: (groupIndex: number, fmtKey: string) => Promise<void>;
   handleDownload: (banner: BannerItem) => void;
   switchTab: (gi: number) => void;
@@ -332,6 +333,127 @@ export function useBannerGeneration({
     }
   }, [brief, hypotheses, selectedHypotheses, selectedFormats, selectedArchetypes, analyzeResult, waitForBanner]);
 
+  // ── Generate banners for a single hypothesis (branching) ──
+  const generateForSingleHypothesis = useCallback(async (
+    hypothesisIdx: number,
+    hypothesis: NewHypothesis,
+  ) => {
+    const activeFormats = BANNER_FORMATS.filter(f => selectedFormats.has(f.key));
+    const requiredCredits = activeFormats.length * 10;
+
+    try {
+      const creditsRes = await fetch('/api/check-credits');
+      if (creditsRes.ok) {
+        const { credits } = await creditsRes.json();
+        if (credits < requiredCredits) { setShowNoCreditsModal(true); return; }
+      } else if (creditsRes.status === 401) { return; }
+    } catch {}
+
+    const newGroup: BannerGroup = {
+      hypothesisIndex: hypothesisIdx,
+      hypothesisTitle: hypothesis.idea,
+      banners: activeFormats.map(f => ({
+        ...f, taskId: null, imageUrl: null, loading: true, error: null,
+        refreshCount: 0, previousVersions: [],
+      })),
+    };
+
+    bannersSavedRef.current = false;
+    const newGroupIndex = bannerGroups.length;
+    setBannerGroups(prev => [...prev, newGroup]);
+    setActiveBannerTab(newGroupIndex);
+
+    const archetype = (selectedArchetypes[0]?.id || analyzeResult?.primaryArchetype || '').toLowerCase();
+    const basePrompt = [
+      brief.product,
+      brief.utp      && `УТП: ${brief.utp}`,
+      brief.audience && `Аудитория: ${brief.audience}`,
+      brief.goal     && `Цель: ${brief.goal}`,
+    ].filter(Boolean).join('. ');
+    const prompt = `${basePrompt}. Гипотеза: ${hypothesis.idea}. Визуал: ${hypothesis.visual}.`;
+
+    const briefImageUrls: string[] =
+      brief.visualMode === 'upload' && brief.imageUrls.length > 0
+        ? brief.imageUrls
+        : brief.visualMode === 'link' && brief.imageLink.trim()
+        ? [brief.imageLink.trim()]
+        : [];
+    const shouldUsePhoto = hypothesis.usePhoto !== false;
+    const imageUrlsToSend = shouldUsePhoto && briefImageUrls.length > 0 ? briefImageUrls : undefined;
+
+    for (let fmtIndex = 0; fmtIndex < activeFormats.length; fmtIndex++) {
+      const fmt = activeFormats[fmtIndex];
+      try {
+        const res = await fetch('/api/generate-banner', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt,
+            width: fmt.width,
+            height: fmt.height,
+            style: 'bold',
+            archetype,
+            offer: brief.offer || undefined,
+            toneOfVoice: brief.toneOfVoice || undefined,
+            imageUrls: imageUrlsToSend,
+          }),
+        });
+
+        if (res.status === 402 || res.status === 403) {
+          setShowNoCreditsModal(true);
+          setBannerGroups(prev =>
+            prev.map((g, gi) =>
+              gi !== newGroupIndex ? g : {
+                ...g,
+                banners: g.banners.map(b =>
+                  b.key === fmt.key ? { ...b, loading: false, error: 'Недостаточно кредитов' } : b
+                ),
+              }
+            )
+          );
+          return;
+        }
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Ошибка' }));
+          throw new Error(err.error || `HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        const taskId = data.taskId;
+        if (!taskId) throw new Error('No taskId in NanoBanana API response');
+
+        setBannerGroups(prev =>
+          prev.map((g, gi) =>
+            gi !== newGroupIndex ? g : {
+              ...g,
+              banners: g.banners.map(b =>
+                b.key === fmt.key ? { ...b, taskId } : b
+              ),
+            }
+          )
+        );
+
+        await waitForBanner(newGroupIndex, fmt.key, taskId);
+
+        if (fmtIndex < activeFormats.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      } catch (err) {
+        setBannerGroups(prev =>
+          prev.map((g, gi) =>
+            gi !== newGroupIndex ? g : {
+              ...g,
+              banners: g.banners.map(b =>
+                b.key === fmt.key ? { ...b, loading: false, error: err instanceof Error ? err.message : 'Ошибка запуска' } : b
+              ),
+            }
+          )
+        );
+      }
+    }
+  }, [bannerGroups, brief, selectedFormats, selectedArchetypes, analyzeResult, waitForBanner]);
+
   // ── Download ──
   const handleDownload = useCallback((banner: BannerItem) => {
     if (!banner.imageUrl) return;
@@ -495,6 +617,7 @@ export function useBannerGeneration({
     activeBannerGroup,
     bannersSavedRef,
     handleGenerateBanners,
+    generateForSingleHypothesis,
     handleRefreshBanner,
     handleDownload,
     switchTab,
