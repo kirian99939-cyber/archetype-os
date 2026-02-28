@@ -207,6 +207,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
   const [resumeLoading, setResumeLoading]          = useState(false);
   const projectIdRef                               = useRef<string | null>(null);
   const pollTimeoutsRef                            = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  const bannersSavedRef                            = useRef(false);
 
   // ── Helpers ──
 
@@ -618,12 +619,14 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
     } catch {}
   }, []);
 
-  // После завершения генерации всех баннеров — сохраняем в БД
+  // После завершения генерации всех баннеров — сохраняем в БД (один раз)
   useEffect(() => {
     const pid = projectIdRef.current;
     if (!pid || bannerGroups.length === 0) return;
     const allDone = bannerGroups.every(g => g.banners.every(b => !b.loading));
     if (!allDone) return;
+    if (bannersSavedRef.current) return; // уже сохранено — не дублируем
+    bannersSavedRef.current = true;
 
     fetch(`/api/projects/${pid}`, {
       method:  'PATCH',
@@ -769,6 +772,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
       hypothesisTitle: hypotheses[idx]?.idea || `Гипотеза ${idx + 1}`,
       banners: BANNER_FORMATS.filter(f => selectedFormats.has(f.key)).map(f => ({ ...f, taskId: null, imageUrl: null, loading: true, error: null, refreshCount: 0, previousVersions: [] })),
     }));
+    bannersSavedRef.current = false;
     setBannerGroups(initialGroups);
     setActiveBannerTab(0);
     setIsSwitchingTab(false);
@@ -912,6 +916,7 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
     if (!group) return;
     const banner = group.banners.find(b => b.key === fmtKey);
     if (!banner || banner.loading || banner.refreshCount >= MAX_REFRESHES_PER_BANNER) return;
+    bannersSavedRef.current = false; // сбрасываем для повторного сохранения после рефреша
 
     // Проверяем кредиты перед рефрешем (10 кредитов)
     try {

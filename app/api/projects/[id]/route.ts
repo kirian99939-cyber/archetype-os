@@ -54,15 +54,22 @@ export async function PATCH(
     const history = Array.isArray(current?.banner_history) ? current.banner_history : [];
     const archetype = body.archetype || current?.archetype;
 
-    const newIteration = {
-      iterationId: `iter_${Date.now()}`,
-      createdAt: new Date().toISOString(),
-      archetypeId: archetype?.id || null,
-      archetypeLabel: archetype?.label || archetype?.id || null,
-      bannerGroups: body.banners,
-    };
+    // Дедупликация: не добавляем итерацию если баннеры идентичны последней
+    const lastIter = history[history.length - 1];
+    const newBannersJson = JSON.stringify(body.banners);
+    const isDuplicate = lastIter && JSON.stringify(lastIter.bannerGroups) === newBannersJson;
 
-    history.push(newIteration);
+    if (!isDuplicate) {
+      const newIteration = {
+        iterationId: `iter_${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        archetypeId: archetype?.id || null,
+        archetypeLabel: archetype?.label || archetype?.id || null,
+        bannerGroups: body.banners,
+      };
+      history.push(newIteration);
+    }
+
     body.banner_history = history;
   }
 
