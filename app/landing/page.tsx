@@ -174,7 +174,7 @@ export default function LandingPage() {
             color: 'var(--accent)', padding: '6px 18px',
           }}>
             <span className="inline-block rounded-full" style={{ width: 6, height: 6, background: 'var(--accent)' }} />
-            26 архетипов · AI-анализ · Instant генерация
+            28 архетипов · AI-анализ · Instant генерация
           </div>
 
           <h1
@@ -345,7 +345,7 @@ export default function LandingPage() {
             {
               label: '🎯 Стратегия и архетипы',
               without: 'Ручной подбор, интуиция',
-              withUs: 'AI на базе 26 архетипов',
+              withUs: 'AI на базе 28 архетипов',
             },
             {
               label: '📐 Форматы',
@@ -420,7 +420,7 @@ export default function LandingPage() {
             База архетипов
           </p>
           <h2 className="font-extrabold mb-3" style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(1.6rem, 3vw, 2.4rem)' }}>
-            26 архетипов в вашем распоряжении
+            28 архетипов в вашем распоряжении
           </h2>
           <p className="text-sm" style={{ color: 'var(--text-muted)', lineHeight: 1.65 }}>
             Каждый архетип — уникальная модель коммуникации с аудиторией,<br />

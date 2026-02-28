@@ -11,7 +11,7 @@ export default function ArchetypesPage() {
     <div>
       <div className="mb-6">
         <h2 className="text-white font-bold text-xl mb-1">Библиотека архетипов</h2>
-        <p className="text-white/40 text-sm">26 архетипов с формулами, аудиторией и рисками</p>
+        <p className="text-white/40 text-sm">28 архетипов с формулами, аудиторией и рисками</p>
       </div>
 
       <div

@@ -26,7 +26,7 @@ const PLANS = [
     features: [
       { text: '1 полный проект', included: true },
       { text: 'Анализ архетипов', included: true },
-      { text: '26 архетипов', included: true },
+      { text: '28 архетипов', included: true },
       { text: 'AI-анализ бренда', included: true },
       { text: 'Приоритетная генерация', included: false },
       { text: 'Поддержка в Telegram', included: false },
@@ -45,7 +45,7 @@ const PLANS = [
     highlighted: false,
     features: [
       { text: '~4 полных проекта', included: true },
-      { text: '26 архетипов', included: true },
+      { text: '28 архетипов', included: true },
       { text: 'AI-анализ бренда', included: true },
       { text: '6 форматов баннеров', included: true },
       { text: 'Скачивание в HD', included: true },
@@ -66,7 +66,7 @@ const PLANS = [
     highlighted: true,
     features: [
       { text: '~16 проектов', included: true },
-      { text: '26 архетипов', included: true },
+      { text: '28 архетипов', included: true },
       { text: 'AI-анализ бренда', included: true },
       { text: '6 форматов баннеров', included: true },
       { text: 'Скачивание в HD', included: true },
@@ -88,7 +88,7 @@ const PLANS = [
     highlighted: false,
     features: [
       { text: '~33 проекта', included: true },
-      { text: '26 архетипов', included: true },
+      { text: '28 архетипов', included: true },
       { text: 'AI-анализ бренда', included: true },
       { text: '6 форматов баннеров', included: true },
       { text: 'Скачивание в HD', included: true },

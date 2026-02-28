@@ -35,6 +35,8 @@ const styleDescriptions: Record<TextRules['style'], string> = {
   provocative: 'провокационный, неожиданный, смелый',
   playful: 'игривый, лёгкий, с юмором',
   scientific: 'точный, с конкретными фактами и цифрами',
+  sensual: 'чувственный, интригующий, с сексуальным намёком — не пошлый, но притягательный. Метафоры тела: прикосновение, тепло кожи, дыхание, изгибы',
+  mysterious: 'таинственный, элитарный, конспирологический. Язык спецслужб: доступ, допуск, рассекречено, только для своих',
 };
 
 const toneInstructions: Record<string, string> = {
@@ -42,6 +44,8 @@ const toneInstructions: Record<string, string> = {
   formal: 'Тон: профессиональный, на «вы». Уважительный, деловой стиль.',
   provocative: 'Тон: провокационный, дерзкий. Вызывающие формулировки.',
   expert: 'Тон: экспертный, авторитетный. Цифры, факты, конкретика.',
+  sensual: 'Тон: чувственный, интригующий. Метафоры тела, прикосновений, удовольствия.',
+  mysterious: 'Тон: засекреченный, элитарный. Создаёт ощущение доступа к запретному.',
 };
 
 const levelDescriptions: Record<TextRules['level'], string> = {
@@ -115,6 +119,11 @@ const SIZE_TO_FORMAT: Record<string, string> = {
   '240x400':   'rsya_vertical',
 };
 
+const archetypeNegativePrompts: Record<string, string> = {
+  seduction: 'full nudity, genitals, pornographic, nsfw, vulgar, cheap, amateur, cartoon, ugly, deformed',
+  'black-box': 'bright colors, cheerful, cartoon, childish, simple, flat design, cute',
+};
+
 function buildImagePrompt(req: GenerateBannerRequest, bannerText: BannerText | null, offer?: string, imageUrls?: string[]): string {
   const archetypeVisualMap: Record<string, string> = {
     mem: 'meme-style layout, bold impact font, internet culture aesthetics',
@@ -142,6 +151,8 @@ function buildImagePrompt(req: GenerateBannerRequest, bannerText: BannerText | n
     pov: 'first-person perspective, hands in frame, active POV shot',
     celebrity: 'authoritative presence, intellectual atmosphere, inspired aesthetic',
     badgood: 'intentionally low-quality look, anti-design, raw unpolished style',
+    seduction: 'Sensual advertising aesthetic with human body focus. Beautiful silhouettes, attractive figures in elegant clothing, close-up shots of collarbone with jewelry, waist curves, lips, back muscles. Wet skin glow, steam, water drops on body. Dramatic chiaroscuro lighting, warm golden rim light on skin. Luxury bedroom, pool edge, silk bedsheets. Deep red, black, warm gold, skin tones. Victoria Secret campaign style, Calvin Klein ad, Tom Ford fragrance commercial. Tasteful and high-fashion — suggestive not explicit.',
+    'black-box': 'Top secret classified technology aesthetic. Dark moody atmosphere, deep blacks and dark navy blue. Redacted documents with black bars, biometric scanners, fingerprint scans, holographic interfaces, encrypted data streams, security clearance badges, sealed envelopes with wax stamps, dark server rooms with blue LED lights, circuit board patterns. Cinematic thriller movie poster style, cyberpunk noir. Typography feels like stamped CLASSIFIED or TOP SECRET.',
   };
 
   const archetypeDesc = req.archetype ? (archetypeVisualMap[req.archetype] || req.archetype) : '';
@@ -293,6 +304,11 @@ export async function POST(req: NextRequest) {
     };
     if (activeImageUrls && activeImageUrls.length > 0) {
       nanoBananaPayload.imageUrls = activeImageUrls;
+    }
+    // Передаём negative prompt для определённых архетипов (критично для seduction)
+    const negPrompt = body.archetype ? archetypeNegativePrompts[body.archetype] : undefined;
+    if (negPrompt) {
+      nanoBananaPayload.negative_prompt = negPrompt;
     }
 
     const res = await fetch('https://api.nanobananaapi.ai/api/v1/nanobanana/generate-pro', {

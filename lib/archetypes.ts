@@ -2,7 +2,7 @@ export interface TextRules {
   level: 'minimal' | 'medium' | 'full';
   includeOffer: boolean;
   includeCta: boolean;
-  style: 'elegant' | 'bold' | 'conversational' | 'provocative' | 'playful' | 'scientific';
+  style: 'elegant' | 'bold' | 'conversational' | 'provocative' | 'playful' | 'scientific' | 'sensual' | 'mysterious';
 }
 
 export interface ArchetypeDefinition {
@@ -44,6 +44,8 @@ export const ARCHETYPES: ArchetypeDefinition[] = [
   { id: "pov", label: "POV", icon: "👁", audience: "16–40, Gen Z, геймеры, DIY", categories: "Гаджеты, спорт, инструменты", formula: "Камера = глаза пользователя, руки + активное действие", risk: "Плохо снятый POV выглядит дёшево", tags: ["Присутствие", "Действие", "Реализм"], platforms: ["TikTok", "YouTube", "Instagram"], textRules: { level: 'medium', includeOffer: false, includeCta: true, style: 'conversational' } },
   { id: "celebrity", label: "Ассоциация с персоной", icon: "🧠", audience: "18–45, мыслящие через образы", categories: "Обучение, умные продукты, детские товары", formula: "Как у Эйнштейна/Илона — перенос смысла без прямого использования", risk: "Юридические вопросы при неаккуратном использовании", tags: ["Перенос смысла", "Авторитет", "Вау"], platforms: ["Instagram", "Facebook", "YouTube"], textRules: { level: 'full', includeOffer: true, includeCta: true, style: 'conversational' } },
   { id: "badgood", label: "Чем хуже тем лучше", icon: "📉", audience: "18–35, Gen Z, уставшие от рекламы", categories: "Дешёвые товары, FMCG, недорогие гаджеты", formula: "Осознанно ломаем качество подачи — контраст с конкурентами", risk: "Сложно отличить от реально плохой рекламы", tags: ["Антиреклама", "Контраст", "Честность"], platforms: ["TikTok", "VK"], textRules: { level: 'full', includeOffer: true, includeCta: true, style: 'provocative' } },
+  { id: "seduction", label: "Соблазн", icon: "🔥", audience: "18–45, ценители эстетики и чувственности", categories: "Парфюмерия, бельё, косметика, фитнес, spa, dating, вино, шоколад, ювелирка, fashion", formula: "Чувственность + притяжение + элегантная провокация. Метафоры тела: прикосновение, тепло кожи, изгибы, шёлк", risk: "Легко перейти в пошлость — нужна элегантность", tags: ["Желание", "Притяжение", "Удовольствие", "Соблазн", "Страсть"], platforms: ["Instagram", "TikTok", "YouTube"], textRules: { level: 'medium', includeOffer: false, includeCta: true, style: 'sensual' } },
+  { id: "black-box", label: "Чёрный ящик", icon: "📦", audience: "20–45, IT-аудитория, крипто, закрытые сообщества", categories: "IT-продукты, SaaS, крипто, VPN, кибербезопасность, закрытые клубы, pre-launch, инфопродукты", formula: "Засекреченная технология + доступ только для избранных. Язык спецслужб: допуск, рассекречено, утечка", risk: "Может выглядеть как спам или скам если переборщить", tags: ["Секретно", "Доступ", "Допуск", "Избранные", "Эксклюзив", "Рассекречено"], platforms: ["Telegram", "Instagram", "VK"], textRules: { level: 'full', includeOffer: true, includeCta: true, style: 'mysterious' } },
 ];
 
 /** Список названий для системного промта AI */
