@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import type { AnalyzeResponse, NewHypothesis, RecommendV2Response, HybridArchetype } from '@/app/api/analyze/route';
 import { ARCHETYPES } from '@/lib/archetypes';
 import { BANNER_FORMATS, AD_PLATFORMS } from '@/lib/project-types';
@@ -63,6 +64,7 @@ interface NewProjectProps {
 
 export default function NewProject({ onBusyChange, initialProject }: NewProjectProps) {
   const { data: session } = useSession();
+  const router = useRouter();
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
   const [brief, setBrief] = useState<Brief>({
@@ -150,6 +152,26 @@ export default function NewProject({ onBusyChange, initialProject }: NewProjectP
     projectIdRef,
     onBusyChange,
   });
+
+  // ── Save project (завершение wizard) ──
+  const [savingProject, setSavingProject] = useState(false);
+
+  const handleSaveProject = async () => {
+    const pid = projectIdRef.current;
+    if (!pid || anyBannerLoading) return;
+    setSavingProject(true);
+    try {
+      await fetch(`/api/projects/${pid}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'completed' }),
+      });
+      localStorage.removeItem('archetype_draft_project');
+      router.push(`/project/${pid}`);
+    } catch {
+      setSavingProject(false);
+    }
+  };
 
   // ── Helpers ──
 
@@ -1760,6 +1782,51 @@ export default function NewProject({ onBusyChange, initialProject }: NewProjectP
                 </div>
               ))}
             </div>
+          )}
+
+          {/* ── Блок завершения проекта ── */}
+          {bannerGroups.length > 0 && (
+            <>
+              <div className="h-px w-full" style={{ background: 'rgba(255,255,255,0.08)', marginTop: 16 }} />
+              <div
+                style={{
+                  marginTop: 40,
+                  padding: 32,
+                  borderRadius: 16,
+                  background: 'rgba(181,211,52,0.05)',
+                  border: '1px solid rgba(181,211,52,0.2)',
+                  textAlign: 'center',
+                }}
+              >
+                <h3 style={{ fontSize: 20, fontWeight: 700, color: '#fff', marginBottom: 8 }}>
+                  Проект готов! 🎉
+                </h3>
+                <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)', marginBottom: 24 }}>
+                  Сохраните проект чтобы вернуться к нему позже, добавить новые гипотезы или сгенерировать ещё баннеры
+                </p>
+                <button
+                  onClick={handleSaveProject}
+                  disabled={anyBannerLoading || savingProject}
+                  style={{
+                    padding: '14px 40px',
+                    background: anyBannerLoading || savingProject ? 'rgba(181,211,52,0.3)' : '#B5D334',
+                    color: anyBannerLoading || savingProject ? 'rgba(0,0,0,0.4)' : '#000',
+                    border: 'none',
+                    borderRadius: 12,
+                    fontSize: 16,
+                    fontWeight: 600,
+                    cursor: anyBannerLoading || savingProject ? 'not-allowed' : 'pointer',
+                    transition: 'opacity 0.2s',
+                  }}
+                >
+                  {anyBannerLoading
+                    ? 'Дождитесь завершения генерации...'
+                    : savingProject
+                    ? 'Сохраняем...'
+                    : '✓ Сохранить проект'}
+                </button>
+              </div>
+            </>
           )}
 
           <div className="flex justify-start">
