@@ -52,15 +52,15 @@ export default function AnimatedLogo({
     return baseNodes.map(() => ({
       phaseX: Math.random() * Math.PI * 2,
       phaseY: Math.random() * Math.PI * 2,
-      speedX: 0.0003 + Math.random() * 0.0002,
-      speedY: 0.0003 + Math.random() * 0.0002,
+      speedX: 0.0012 + Math.random() * 0.0008,
+      speedY: 0.0012 + Math.random() * 0.0008,
     }));
   }, []);
 
   const currentNodes = baseNodes.map((node, i) => {
     const params = animParams[i];
-    const offsetX = Math.sin(t * params.speedX + params.phaseX) * 2 + Math.sin(t * params.speedX * 0.6 + params.phaseY) * 1;
-    const offsetY = Math.cos(t * params.speedY + params.phaseY) * 2 + Math.cos(t * params.speedY * 0.6 + params.phaseX) * 1;
+    const offsetX = Math.sin(t * params.speedX + params.phaseX) * 8 + Math.sin(t * params.speedX * 0.6 + params.phaseY) * 4;
+    const offsetY = Math.cos(t * params.speedY + params.phaseY) * 8 + Math.cos(t * params.speedY * 0.6 + params.phaseX) * 4;
     return { ...node, cx: node.x + offsetX, cy: node.y + offsetY };
   });
 

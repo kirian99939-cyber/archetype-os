@@ -2064,9 +2064,9 @@ export default function NewProject({ onBusyChange }: { onBusyChange?: (busy: boo
                       </div>
                     )}
                     {banner.loading && !banner.imageUrl && !banner.taskId && (
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 40 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 40 }}>
                         <AnimatedLogo size={48} inline />
-                        <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>В очереди...</span>
+                        <LoadingMessages intervalMs={3000} />
                       </div>
                     )}
                     {!banner.loading && !banner.imageUrl && !banner.error && (
