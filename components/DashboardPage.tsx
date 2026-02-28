@@ -89,7 +89,7 @@ export default function DashboardPage({ onNavigate }: Props) {
   const STATS = [
     { value: String(totalProjects), label: 'Всего проектов', sub: `из них завершено: ${completedProjects}`, icon: '◈' },
     { value: String(totalBanners), label: 'Баннеров создано', sub: 'за всё время', icon: '▦' },
-    { value: String(credits), label: 'Кредитов осталось', sub: '1 кредит = 1 пакет баннеров', icon: '⚡' },
+    { value: String(credits), label: 'Кредитов осталось', sub: '10 кр = 1 гипотеза или 1 баннер', icon: '⚡' },
   ];
 
   return (
