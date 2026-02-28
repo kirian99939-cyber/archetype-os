@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { ARCHETYPES } from '@/lib/archetypes';
+import AnimatedLogo from '@/components/AnimatedLogo';
 
 const ACCENT = '#C8FF00';
 const ACCENT_BG = 'rgba(200,255,0,0.1)';
@@ -120,12 +121,9 @@ export default function AnalyticsPage() {
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto">
-        <div className="glass-card p-12 text-center">
-          <div
-            className="w-10 h-10 rounded-full border-2 animate-spin mx-auto mb-4"
-            style={{ borderColor: ACCENT, borderTopColor: 'transparent' }}
-          />
-          <p className="text-white/40 text-sm">Загружаем аналитику...</p>
+        <div className="glass-card p-12 flex flex-col items-center">
+          <AnimatedLogo size={48} inline />
+          <p className="text-white/40 text-sm mt-4">Загружаем аналитику...</p>
         </div>
       </div>
     );

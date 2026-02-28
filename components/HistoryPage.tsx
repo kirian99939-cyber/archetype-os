@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { ARCHETYPES } from '@/lib/archetypes';
+import AnimatedLogo from '@/components/AnimatedLogo';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -149,12 +150,9 @@ export default function HistoryPage({ onNavigate }: HistoryPageProps) {
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto">
-        <div className="glass-card p-12 text-center">
-          <div
-            className="w-10 h-10 rounded-full border-2 animate-spin mx-auto mb-4"
-            style={{ borderColor: ACCENT, borderTopColor: 'transparent' }}
-          />
-          <p className="text-white/40 text-sm">Загружаем историю...</p>
+        <div className="glass-card p-12 flex flex-col items-center">
+          <AnimatedLogo size={48} inline />
+          <p className="text-white/40 text-sm mt-4">Загружаем историю...</p>
         </div>
       </div>
     );

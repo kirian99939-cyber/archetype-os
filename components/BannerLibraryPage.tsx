@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { ARCHETYPES } from '@/lib/archetypes';
+import AnimatedLogo from '@/components/AnimatedLogo';
 
 const ACCENT = '#C8FF00';
 const ACCENT_BG = 'rgba(200,255,0,0.1)';
@@ -68,8 +69,7 @@ export default function BannerLibraryPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 rounded-full border-2 animate-spin"
-          style={{ borderColor: ACCENT, borderTopColor: 'transparent' }} />
+        <AnimatedLogo size={48} inline />
       </div>
     );
   }

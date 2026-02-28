@@ -14,6 +14,7 @@ import PricingSection from '@/components/PricingSection';
 import BannerLibraryPage from '@/components/BannerLibraryPage';
 import AdminPage from '@/components/AdminPage';
 import ReferralDashboard from '@/components/ReferralDashboard';
+import AnimatedLogo from '@/components/AnimatedLogo';
 import ChangelogModal, { hasUnseenChangelog } from '@/components/ChangelogModal';
 
 type Page =
@@ -109,11 +110,9 @@ export default function DashboardRoute() {
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--background)' }}>
-        <div className="text-center">
-          <span style={{ color: 'var(--accent)', fontSize: '2rem' }}>⚡</span>
-          <p className="text-white/40 text-sm mt-3">Загрузка...</p>
-        </div>
+      <div className="min-h-screen flex flex-col items-center justify-center" style={{ background: 'var(--background)' }}>
+        <AnimatedLogo size={64} inline />
+        <p className="text-white/40 text-sm mt-4">Загрузка...</p>
       </div>
     );
   }
