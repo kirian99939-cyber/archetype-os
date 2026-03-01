@@ -177,112 +177,169 @@ export default function PricingSection({ isLoggedIn, onSelectPlan }: PricingSect
       </div>
 
       {/* Plans grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-5xl mx-auto">
-        {PLANS.map(plan => (
-          <div
-            key={plan.id}
-            className="relative flex flex-col rounded-2xl overflow-hidden"
-            style={{
-              background: plan.highlighted
-                ? 'linear-gradient(180deg, rgba(200,255,0,0.06) 0%, rgba(255,255,255,0.02) 100%)'
-                : 'rgba(255,255,255,0.03)',
-              border: plan.highlighted
-                ? `2px solid ${ACCENT}`
-                : '1px solid rgba(255,255,255,0.1)',
-            }}
-          >
-            {/* Badge */}
-            {plan.badge && (
-              <div
-                className="text-center py-1.5 text-[10px] font-bold uppercase tracking-wider"
-                style={{
-                  background: plan.highlighted ? ACCENT : 'rgba(255,255,255,0.08)',
-                  color: plan.highlighted ? '#0A0A0A' : 'rgba(255,255,255,0.6)',
-                }}
-              >
-                {plan.badge}
-              </div>
-            )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-5xl mx-auto" style={{ alignItems: 'start' }}>
+        {PLANS.map(plan => {
+          const isPro = plan.id === 'pro';
+          const isBusiness = plan.id === 'business';
 
-            <div className="p-5 flex flex-col flex-1">
-              {/* Name + description */}
-              <h3 className="text-white font-bold text-lg">{plan.name}</h3>
-              <p className="text-white/40 text-xs mt-0.5 mb-4">{plan.description}</p>
+          // Card styles per plan
+          const cardStyle: React.CSSProperties = {
+            position: 'relative',
+            overflow: 'visible',
+            background: isPro
+              ? 'rgba(181,211,52,0.05)'
+              : isBusiness
+              ? 'rgba(255,215,0,0.03)'
+              : 'rgba(255,255,255,0.03)',
+            border: isPro
+              ? '2px solid #B5D334'
+              : isBusiness
+              ? '1px solid rgba(255,215,0,0.3)'
+              : '1px solid rgba(255,255,255,0.1)',
+            transform: isPro ? 'scale(1.03)' : undefined,
+          };
 
-              {/* Price */}
-              <div className="mb-1">
-                {plan.oldPrice && (
-                  <span className="text-white/25 text-sm line-through mr-2">
-                    {formatPrice(plan.oldPrice)} ₽
-                  </span>
-                )}
-                <span className="text-white font-extrabold text-2xl">
-                  {plan.price === 0 ? '0 ₽' : `${formatPrice(plan.price)} ₽`}
-                </span>
-              </div>
+          // Button styles per plan
+          const btnStyle: React.CSSProperties = isPro
+            ? { background: '#B5D334', color: '#000' }
+            : isBusiness
+            ? { background: 'linear-gradient(135deg, #FFD700, #FFA500)', color: '#000' }
+            : plan.price === 0 && isLoggedIn
+            ? { background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.3)', cursor: 'default' }
+            : { background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.12)' };
 
-              {/* Per banner */}
-              {(plan as any).perBanner && (
-                <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>
-                  {(plan as any).perBanner}
-                </p>
+          return (
+            <div
+              key={plan.id}
+              className="relative flex flex-col rounded-2xl"
+              style={cardStyle}
+            >
+              {/* Floating badge — Pro */}
+              {isPro && (
+                <div style={{
+                  position: 'absolute',
+                  top: -14,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  background: '#B5D334',
+                  color: '#000',
+                  padding: '4px 16px',
+                  borderRadius: 20,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                  zIndex: 1,
+                }}>
+                  ⭐ Лучший выбор
+                </div>
               )}
 
-              {/* Per credit */}
-              <p className="text-white/30 text-xs mb-4">
-                {plan.price === 0
-                  ? `${plan.credits} кредитов при регистрации`
-                  : `${plan.credits} кредитов`}
-              </p>
+              {/* Floating badge — Business */}
+              {isBusiness && (
+                <div style={{
+                  position: 'absolute',
+                  top: -14,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  background: 'linear-gradient(135deg, #FFD700, #FFA500)',
+                  color: '#000',
+                  padding: '4px 16px',
+                  borderRadius: 20,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                  zIndex: 1,
+                }}>
+                  💰 Супер выгодно
+                </div>
+              )}
 
-              {/* CTA */}
-              <button
-                onClick={() => handleClick(plan)}
-                className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all mb-5"
-                style={
-                  plan.highlighted
-                    ? { background: ACCENT, color: '#0A0A0A' }
-                    : plan.price === 0 && isLoggedIn
-                    ? { background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.3)', cursor: 'default' }
-                    : { background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.12)' }
-                }
-              >
-                {plan.price === 0 && isLoggedIn ? 'Текущий план' : plan.cta}
-              </button>
+              <div className="p-5 flex flex-col flex-1">
+                {/* Name + description */}
+                <h3 className="text-white font-bold text-lg">{plan.name}</h3>
+                <p className="text-white/40 text-xs mt-0.5 mb-4">{plan.description}</p>
 
-              {/* Credits badge */}
-              <div
-                className="flex items-center gap-2 px-3 py-2 rounded-lg mb-4"
-                style={{ background: ACCENT_BG, border: `1px solid ${ACCENT_BORDER}` }}
-              >
-                <span style={{ color: ACCENT }}>⚡</span>
-                <span className="text-sm font-semibold" style={{ color: ACCENT }}>
-                  {plan.credits} кредитов
-                </span>
-              </div>
-
-              {/* Features */}
-              <div className="space-y-2.5 flex-1">
-                {plan.features.map((f, i) => (
-                  <div key={i} className="flex items-start gap-2">
-                    <span
-                      className="text-xs mt-0.5 shrink-0"
-                      style={{ color: f.included ? ACCENT : 'rgba(255,255,255,0.15)' }}
-                    >
-                      {f.included ? '✓' : '✕'}
+                {/* Price */}
+                <div className="mb-1">
+                  {plan.oldPrice && (
+                    <span className="text-white/25 text-sm line-through mr-2">
+                      {formatPrice(plan.oldPrice)} ₽
                     </span>
-                    <span
-                      className="text-xs leading-snug"
-                      style={{ color: f.included ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)' }}
-                    >
-                      {f.text}
-                    </span>
-                  </div>
-                ))}
+                  )}
+                  <span className="text-white font-extrabold text-2xl">
+                    {plan.price === 0 ? '0 ₽' : `${formatPrice(plan.price)} ₽`}
+                  </span>
+                </div>
+
+                {/* Per banner */}
+                {(plan as any).perBanner && (
+                  <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>
+                    {(plan as any).perBanner}
+                  </p>
+                )}
+
+                {/* Highlight subtitle */}
+                {isPro && (
+                  <p style={{ fontSize: 12, color: '#B5D334', marginTop: 4 }}>
+                    Самый популярный
+                  </p>
+                )}
+                {isBusiness && (
+                  <p style={{ fontSize: 12, color: '#FFD700', marginTop: 4 }}>
+                    Экономия 30% за кредит
+                  </p>
+                )}
+
+                {/* Per credit */}
+                <p className="text-white/30 text-xs mb-4">
+                  {plan.price === 0
+                    ? `${plan.credits} кредитов при регистрации`
+                    : `${plan.credits} кредитов`}
+                </p>
+
+                {/* CTA */}
+                <button
+                  onClick={() => handleClick(plan)}
+                  className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all mb-5"
+                  style={btnStyle}
+                >
+                  {plan.price === 0 && isLoggedIn ? 'Текущий план' : plan.cta}
+                </button>
+
+                {/* Credits badge */}
+                <div
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg mb-4"
+                  style={{ background: ACCENT_BG, border: `1px solid ${ACCENT_BORDER}` }}
+                >
+                  <span style={{ color: ACCENT }}>⚡</span>
+                  <span className="text-sm font-semibold" style={{ color: ACCENT }}>
+                    {plan.credits} кредитов
+                  </span>
+                </div>
+
+                {/* Features */}
+                <div className="space-y-2.5 flex-1">
+                  {plan.features.map((f, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <span
+                        className="text-xs mt-0.5 shrink-0"
+                        style={{ color: f.included ? ACCENT : 'rgba(255,255,255,0.15)' }}
+                      >
+                        {f.included ? '✓' : '✕'}
+                      </span>
+                      <span
+                        className="text-xs leading-snug"
+                        style={{ color: f.included ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)' }}
+                      >
+                        {f.text}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Bottom note */}
