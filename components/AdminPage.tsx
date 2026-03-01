@@ -159,7 +159,7 @@ export default function AdminPage() {
                 <p className="text-xl font-bold" style={{ color: '#ff6b6b' }}>
                   ~{stats.finance.estimatedApiCost.toLocaleString('ru-RU')} ₽
                 </p>
-                <p className="text-white/20 text-xs mt-0.5">~150 ₽ × {stats.credits.spent} кредитов</p>
+                <p className="text-white/20 text-xs mt-0.5">~{stats.credits.spent} кредитов израсходовано</p>
               </div>
               <div>
                 <p className="text-white/40 text-xs">Стоимость 1 баннера</p>

@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   // Метрики по юзерам
   const totalUsers = allUsers.length;
   const totalCreditsRemaining = allUsers.reduce((sum, u) => sum + (u.credits || 0), 0);
-  const initialCredits = totalUsers * 3; // каждый получил 3 при регистрации
+  const initialCredits = totalUsers * 100; // каждый получил 100 при регистрации
   const creditsSpent = initialCredits - totalCreditsRemaining;
 
   // Активные (создали хотя бы 1 проект)
@@ -74,8 +74,8 @@ export async function GET(req: NextRequest) {
     projectsByDay[day] = (projectsByDay[day] || 0) + 1;
   });
 
-  // Расход API (оценка: ~150₽ за кредит)
-  const estimatedApiCost = creditsSpent * 150;
+  // Расход API (оценка: ~5₽ за кредит, т.е. ~50₽ за баннер/10 кредитов)
+  const estimatedApiCost = creditsSpent * 5;
 
   return NextResponse.json({
     users: {
