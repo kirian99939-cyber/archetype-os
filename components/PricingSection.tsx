@@ -39,7 +39,7 @@ const PLANS = [
     description: 'Для малого бизнеса',
     credits: 400,
     price: 1990,
-    oldPrice: null,
+    oldPrice: 3990,
     perCredit: null,
     perBanner: '~50₽ за баннер',
     badge: null,
@@ -53,7 +53,7 @@ const PLANS = [
       { text: 'История проектов', included: true },
       { text: 'Поддержка в Telegram', included: false },
     ],
-    cta: 'Выбрать Старт',
+    cta: 'Начать за 1 990₽',
   },
   {
     id: 'pro',
@@ -61,7 +61,7 @@ const PLANS = [
     description: 'Для агентств и маркетологов',
     credits: 1500,
     price: 6990,
-    oldPrice: null,
+    oldPrice: 13990,
     perCredit: null,
     perBanner: '~47₽ за баннер',
     badge: 'ЛУЧШИЙ ВЫБОР',
@@ -76,7 +76,7 @@ const PLANS = [
       { text: 'Приоритетная генерация', included: true },
       { text: 'Поддержка в Telegram', included: true },
     ],
-    cta: 'Выбрать Про',
+    cta: 'Выбрать Про за 6 990₽',
   },
   {
     id: 'business',
@@ -84,7 +84,7 @@ const PLANS = [
     description: 'Максимум возможностей',
     credits: 3000,
     price: 12990,
-    oldPrice: null,
+    oldPrice: 25990,
     perCredit: null,
     perBanner: '~43₽ за баннер',
     badge: 'ДЛЯ КОМАНД',
@@ -101,7 +101,7 @@ const PLANS = [
       { text: 'Ранний доступ к фичам', included: true },
       { text: 'Персональная поддержка', included: true },
     ],
-    cta: 'Выбрать Бизнес',
+    cta: 'Выбрать Бизнес за 12 990₽',
   },
 ];
 
@@ -156,14 +156,21 @@ export default function PricingSection({ isLoggedIn, onSelectPlan }: PricingSect
 
   return (
     <div>
-      {/* Beta badge */}
-      <div className="text-center mb-10">
-        <span
-          className="inline-block text-xs font-bold px-4 py-1.5 rounded-full mb-5"
-          style={{ background: 'rgba(255,180,0,0.12)', color: '#FFB400', border: '1px solid rgba(255,180,0,0.25)' }}
-        >
-          🔥 Цена раннего доступа — скоро повысим
+      {/* Discount banner */}
+      <div style={{
+        background: 'linear-gradient(135deg, rgba(239,68,68,0.1), rgba(239,68,68,0.05))',
+        border: '1px solid rgba(239,68,68,0.2)',
+        borderRadius: 12,
+        padding: '12px 24px',
+        textAlign: 'center',
+        marginBottom: 32,
+      }}>
+        <span style={{ fontSize: 15, color: '#fff' }}>
+          🔥 <strong>Спецусловия запуска:</strong> скидка 50% на все тарифы до 31 марта
         </span>
+      </div>
+
+      <div className="text-center mb-10">
         <h2
           className="font-extrabold mb-3"
           style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(1.6rem, 3vw, 2.4rem)', lineHeight: 1.2 }}
@@ -260,15 +267,31 @@ export default function PricingSection({ isLoggedIn, onSelectPlan }: PricingSect
                 <p className="text-white/40 text-xs mt-0.5 mb-4">{plan.description}</p>
 
                 {/* Price */}
-                <div className="mb-1">
-                  {plan.oldPrice && (
-                    <span className="text-white/25 text-sm line-through mr-2">
-                      {formatPrice(plan.oldPrice)} ₽
+                <div style={{ marginBottom: 16 }}>
+                  {plan.oldPrice ? (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontSize: 16, color: 'rgba(255,255,255,0.35)', textDecoration: 'line-through' }}>
+                          {formatPrice(plan.oldPrice)}₽
+                        </span>
+                        <span style={{
+                          background: 'rgba(239,68,68,0.15)',
+                          color: '#ef4444',
+                          padding: '2px 8px',
+                          borderRadius: 6,
+                          fontSize: 12,
+                          fontWeight: 600,
+                        }}>-50%</span>
+                      </div>
+                      <span style={{ fontSize: 36, fontWeight: 800, color: '#fff' }}>
+                        {formatPrice(plan.price)}₽
+                      </span>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: 36, fontWeight: 800, color: '#fff' }}>
+                      {plan.price === 0 ? '0 ₽' : `${formatPrice(plan.price)}₽`}
                     </span>
                   )}
-                  <span className="text-white font-extrabold text-2xl">
-                    {plan.price === 0 ? '0 ₽' : `${formatPrice(plan.price)} ₽`}
-                  </span>
                 </div>
 
                 {/* Per banner */}
