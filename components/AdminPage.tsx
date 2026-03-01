@@ -1,7 +1,19 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import AnimatedLogo from '@/components/AnimatedLogo';
+
+// Lazy-load recharts (SSR-incompatible)
+const ResponsiveContainer = dynamic(() => import('recharts').then(m => m.ResponsiveContainer), { ssr: false });
+const BarChart = dynamic(() => import('recharts').then(m => m.BarChart), { ssr: false });
+const Bar = dynamic(() => import('recharts').then(m => m.Bar), { ssr: false });
+const LineChart = dynamic(() => import('recharts').then(m => m.LineChart), { ssr: false });
+const Line = dynamic(() => import('recharts').then(m => m.Line), { ssr: false });
+const XAxis = dynamic(() => import('recharts').then(m => m.XAxis), { ssr: false });
+const YAxis = dynamic(() => import('recharts').then(m => m.YAxis), { ssr: false });
+const CartesianGrid = dynamic(() => import('recharts').then(m => m.CartesianGrid), { ssr: false });
+const Tooltip = dynamic(() => import('recharts').then(m => m.Tooltip), { ssr: false });
 
 const ACCENT = '#C8FF00';
 const ACCENT_BG = 'rgba(200,255,0,0.1)';
@@ -25,6 +37,25 @@ interface AdminStats {
   banners: { total: number };
   credits: { initialTotal: number; spent: number; remaining: number };
   finance: { estimatedApiCost: number; registrationsByDay: Record<string, number> };
+}
+
+interface AnalyticsPeriod {
+  banners: number;
+  projects: number;
+  newUsers: number;
+  creditsSpent: number;
+  estimatedCostRub: number;
+}
+
+interface DailyPoint extends AnalyticsPeriod {
+  date: string;
+}
+
+interface AnalyticsData {
+  today: AnalyticsPeriod;
+  week: AnalyticsPeriod;
+  month: AnalyticsPeriod;
+  daily: DailyPoint[];
 }
 
 interface EnrichedUser {
@@ -54,10 +85,13 @@ export default function AdminPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<'overview' | 'users' | 'activity'>('overview');
+  const [tab, setTab] = useState<'overview' | 'users' | 'activity' | 'analytics'>('overview');
   const [enrichedUsers, setEnrichedUsers] = useState<EnrichedUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [sortBy, setSortBy] = useState<'date' | 'credits' | 'banners'>('date');
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [period, setPeriod] = useState<'today' | 'week' | 'month'>('week');
 
   useEffect(() => {
     fetch('/api/admin/stats')
@@ -69,6 +103,17 @@ export default function AdminPage() {
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
+
+  // Загружаем аналитику при переключении на таб
+  useEffect(() => {
+    if (tab !== 'analytics' || analytics) return;
+    setAnalyticsLoading(true);
+    fetch('/api/admin/analytics')
+      .then(r => r.json())
+      .then(d => setAnalytics(d))
+      .catch(() => {})
+      .finally(() => setAnalyticsLoading(false));
+  }, [tab, analytics]);
 
   // Загружаем обогащённых пользователей при переключении на таб
   useEffect(() => {
@@ -125,9 +170,10 @@ export default function AdminPage() {
       <div className="flex gap-2">
         {([
           { id: 'overview', label: '📊 Обзор' },
+          { id: 'analytics', label: '📈 Аналитика' },
           { id: 'users', label: '👥 Пользователи' },
-          { id: 'activity', label: '📈 Активность' },
-        ] as { id: 'overview' | 'users' | 'activity'; label: string }[]).map(t => (
+          { id: 'activity', label: '📉 Активность' },
+        ] as { id: typeof tab; label: string }[]).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className="px-4 py-2 rounded-xl text-sm font-medium transition-all"
             style={{
@@ -197,6 +243,138 @@ export default function AdminPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ═══ АНАЛИТИКА ═══ */}
+      {tab === 'analytics' && (
+        analyticsLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <AnimatedLogo size={36} inline />
+          </div>
+        ) : analytics ? (
+          <div className="space-y-6">
+            {/* Переключатель периода */}
+            <div className="flex gap-2">
+              {([
+                { key: 'today' as const, label: 'Сегодня' },
+                { key: 'week' as const, label: 'Неделя' },
+                { key: 'month' as const, label: 'Месяц' },
+              ]).map(p => (
+                <button key={p.key} onClick={() => setPeriod(p.key)}
+                  className="px-4 py-2 rounded-xl text-sm font-medium transition-all"
+                  style={{
+                    background: period === p.key ? ACCENT_BG : 'rgba(255,255,255,0.05)',
+                    border: `1px solid ${period === p.key ? ACCENT : 'rgba(255,255,255,0.1)'}`,
+                    color: period === p.key ? ACCENT : 'rgba(255,255,255,0.5)',
+                  }}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Метрики за период */}
+            {(() => {
+              const d = analytics[period];
+              return (
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  <StatCard label="Баннеров" value={d.banners} />
+                  <StatCard label="Проектов" value={d.projects} />
+                  <StatCard label="Новых юзеров" value={d.newUsers} />
+                  <div className="glass-card p-5">
+                    <p className="text-white/40 text-xs uppercase tracking-wider mb-1">Кредитов потрачено</p>
+                    <p className="text-2xl font-extrabold" style={{ color: '#f59e0b' }}>{d.creditsSpent}</p>
+                  </div>
+                  <div className="glass-card p-5">
+                    <p className="text-white/40 text-xs uppercase tracking-wider mb-1">Себестоимость</p>
+                    <p className="text-2xl font-extrabold" style={{ color: '#ef4444' }}>~{d.estimatedCostRub.toLocaleString('ru-RU')}₽</p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Графики */}
+            {(() => {
+              const chartData = analytics.daily.slice(
+                period === 'today' ? -1 : period === 'week' ? -7 : -30
+              );
+              const tooltipStyle = { background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 };
+              const fmtDate = (d: string) => {
+                const dt = new Date(d + 'T00:00:00');
+                return dt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+              };
+              const axisStroke = 'rgba(255,255,255,0.3)';
+              const gridStroke = 'rgba(255,255,255,0.05)';
+
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Баннеры */}
+                  <div className="glass-card p-6">
+                    <h3 className="text-white/60 text-sm font-semibold mb-4">Баннеры по дням</h3>
+                    <div style={{ width: '100%', height: 250 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                          <XAxis dataKey="date" tickFormatter={fmtDate} stroke={axisStroke} fontSize={11} />
+                          <YAxis stroke={axisStroke} fontSize={11} />
+                          <Tooltip contentStyle={tooltipStyle} labelFormatter={(d) => fmtDate(String(d))} />
+                          <Bar dataKey="banners" name="Баннеры" fill="#B5D334" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Себестоимость */}
+                  <div className="glass-card p-6">
+                    <h3 className="text-white/60 text-sm font-semibold mb-4">Расходы API (₽)</h3>
+                    <div style={{ width: '100%', height: 250 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                          <XAxis dataKey="date" tickFormatter={fmtDate} stroke={axisStroke} fontSize={11} />
+                          <YAxis stroke={axisStroke} fontSize={11} />
+                          <Tooltip contentStyle={tooltipStyle} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [`${v}₽`, '']} />
+                          <Line dataKey="estimatedCostRub" name="Себестоимость" stroke="#ef4444" strokeWidth={2} dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Новые пользователи */}
+                  <div className="glass-card p-6">
+                    <h3 className="text-white/60 text-sm font-semibold mb-4">Новые пользователи</h3>
+                    <div style={{ width: '100%', height: 250 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                          <XAxis dataKey="date" tickFormatter={fmtDate} stroke={axisStroke} fontSize={11} />
+                          <YAxis stroke={axisStroke} fontSize={11} />
+                          <Tooltip contentStyle={tooltipStyle} labelFormatter={(d) => fmtDate(String(d))} />
+                          <Bar dataKey="newUsers" name="Новые юзеры" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Кредиты */}
+                  <div className="glass-card p-6">
+                    <h3 className="text-white/60 text-sm font-semibold mb-4">Кредиты потрачено</h3>
+                    <div style={{ width: '100%', height: 250 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                          <XAxis dataKey="date" tickFormatter={fmtDate} stroke={axisStroke} fontSize={11} />
+                          <YAxis stroke={axisStroke} fontSize={11} />
+                          <Tooltip contentStyle={tooltipStyle} labelFormatter={(d) => fmtDate(String(d))} />
+                          <Bar dataKey="creditsSpent" name="Кредиты" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        ) : null
       )}
 
       {/* ═══ ПОЛЬЗОВАТЕЛИ ═══ */}
