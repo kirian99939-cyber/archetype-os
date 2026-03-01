@@ -27,6 +27,19 @@ interface AdminStats {
   finance: { estimatedApiCost: number; registrationsByDay: Record<string, number> };
 }
 
+interface EnrichedUser {
+  id: string;
+  email: string;
+  name: string;
+  avatarUrl: string | null;
+  credits: number;
+  createdAt: string;
+  totalProjects: number;
+  completedProjects: number;
+  totalBanners: number;
+  lastActive: string;
+}
+
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
     <div className="glass-card p-5">
@@ -42,6 +55,9 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<'overview' | 'users' | 'activity'>('overview');
+  const [enrichedUsers, setEnrichedUsers] = useState<EnrichedUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [sortBy, setSortBy] = useState<'date' | 'credits' | 'banners'>('date');
 
   useEffect(() => {
     fetch('/api/admin/stats')
@@ -53,6 +69,17 @@ export default function AdminPage() {
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
+
+  // Загружаем обогащённых пользователей при переключении на таб
+  useEffect(() => {
+    if (tab !== 'users' || enrichedUsers.length > 0) return;
+    setUsersLoading(true);
+    fetch('/api/admin/users')
+      .then(r => r.json())
+      .then(d => setEnrichedUsers(d.users || []))
+      .catch(() => {})
+      .finally(() => setUsersLoading(false));
+  }, [tab, enrichedUsers.length]);
 
   if (loading) {
     return (
@@ -174,42 +201,95 @@ export default function AdminPage() {
 
       {/* ═══ ПОЛЬЗОВАТЕЛИ ═══ */}
       {tab === 'users' && (
-        <div className="glass-card p-6 overflow-x-auto">
-          <h3 className="text-white font-semibold mb-4">👥 Все пользователи ({stats.users.total})</h3>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-white/40 text-xs uppercase tracking-wider">
-                <th className="text-left py-2 px-3">Имя</th>
-                <th className="text-left py-2 px-3">Email</th>
-                <th className="text-center py-2 px-3">Кредиты</th>
-                <th className="text-center py-2 px-3">Проекты</th>
-                <th className="text-center py-2 px-3">Готовых</th>
-                <th className="text-right py-2 px-3">Регистрация</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.users.list.map(u => (
-                <tr key={u.id} className="border-t" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
-                  <td className="py-2.5 px-3 text-white font-medium">{u.name || '—'}</td>
-                  <td className="py-2.5 px-3 text-white/50">{u.email}</td>
-                  <td className="py-2.5 px-3 text-center">
-                    <span className="px-2 py-0.5 rounded-full text-xs font-bold"
-                      style={{
-                        background: u.credits > 0 ? ACCENT_BG : 'rgba(255,60,60,0.1)',
-                        color: u.credits > 0 ? ACCENT : '#ff6b6b',
-                      }}>
-                      {u.credits}
-                    </span>
-                  </td>
-                  <td className="py-2.5 px-3 text-center text-white/60">{u.projectCount}</td>
-                  <td className="py-2.5 px-3 text-center text-white/60">{u.completedCount}</td>
-                  <td className="py-2.5 px-3 text-right text-white/30 text-xs">
-                    {new Date(u.createdAt).toLocaleDateString('ru-RU')}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-6">
+          {/* Сводка */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <StatCard label="Пользователей" value={enrichedUsers.length || stats.users.total} />
+            <StatCard label="Баннеров создано" value={enrichedUsers.reduce((s, u) => s + u.totalBanners, 0) || stats.banners.total} />
+            <StatCard label="Проектов" value={enrichedUsers.reduce((s, u) => s + u.totalProjects, 0) || stats.projects.total} />
+            <StatCard label="Без кредитов" value={enrichedUsers.filter(u => u.credits === 0).length} sub="потратили все" />
+          </div>
+
+          {/* Сортировка */}
+          <div className="flex gap-2">
+            {([
+              { key: 'date' as const, label: 'По дате' },
+              { key: 'credits' as const, label: 'По кредитам' },
+              { key: 'banners' as const, label: 'По баннерам' },
+            ]).map(s => (
+              <button key={s.key} onClick={() => setSortBy(s.key)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                style={{
+                  background: sortBy === s.key ? ACCENT : 'rgba(255,255,255,0.08)',
+                  color: sortBy === s.key ? '#000' : 'rgba(255,255,255,0.5)',
+                }}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Таблица */}
+          <div className="glass-card p-6 overflow-x-auto">
+            {usersLoading ? (
+              <div className="flex items-center justify-center py-10">
+                <AnimatedLogo size={36} inline />
+              </div>
+            ) : (
+              <table className="w-full text-sm" style={{ minWidth: 700 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                    <th className="text-left py-3 px-3 text-white/50 text-xs font-semibold">Пользователь</th>
+                    <th className="text-center py-3 px-3 text-white/50 text-xs font-semibold">Кредиты</th>
+                    <th className="text-center py-3 px-3 text-white/50 text-xs font-semibold">Проекты</th>
+                    <th className="text-center py-3 px-3 text-white/50 text-xs font-semibold">Баннеры</th>
+                    <th className="text-center py-3 px-3 text-white/50 text-xs font-semibold">Регистрация</th>
+                    <th className="text-center py-3 px-3 text-white/50 text-xs font-semibold">Активность</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...enrichedUsers]
+                    .sort((a, b) => {
+                      if (sortBy === 'credits') return a.credits - b.credits;
+                      if (sortBy === 'banners') return b.totalBanners - a.totalBanners;
+                      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                    })
+                    .map(u => (
+                    <tr key={u.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-2.5">
+                          {u.avatarUrl && (
+                            <img src={u.avatarUrl} alt="" className="rounded-full" style={{ width: 32, height: 32 }} />
+                          )}
+                          <div>
+                            <div className="text-white font-medium text-sm">{u.name || 'Без имени'}</div>
+                            <div className="text-white/40 text-xs">{u.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        <span className="px-2.5 py-1 rounded-full text-xs font-bold" style={{
+                          background: u.credits === 0 ? 'rgba(239,68,68,0.1)' : u.credits < 30 ? 'rgba(245,158,11,0.1)' : ACCENT_BG,
+                          color: u.credits === 0 ? '#ef4444' : u.credits < 30 ? '#f59e0b' : ACCENT,
+                        }}>
+                          {u.credits}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-center text-white text-sm">
+                        {u.completedProjects}/{u.totalProjects}
+                      </td>
+                      <td className="py-3 px-3 text-center text-white text-sm">{u.totalBanners}</td>
+                      <td className="py-3 px-3 text-center text-white/50 text-xs">
+                        {new Date(u.createdAt).toLocaleDateString('ru-RU')}
+                      </td>
+                      <td className="py-3 px-3 text-center text-white/50 text-xs">
+                        {new Date(u.lastActive).toLocaleDateString('ru-RU')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
       )}
 
