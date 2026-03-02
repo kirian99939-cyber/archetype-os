@@ -49,9 +49,9 @@ const toneInstructions: Record<string, string> = {
 };
 
 const levelDescriptions: Record<TextRules['level'], string> = {
-  minimal: 'Только название бренда или слоган — 1–3 слова',
-  medium: 'Заголовок 5–7 слов + короткий CTA 2–4 слова. Оффер не нужен.',
-  full: 'Заголовок 5–8 слов + оффер/подзаголовок 8–12 слов + CTA 2–4 слова',
+  minimal: 'Только 1-3 слова. Название или слоган. offer и cta оставь пустыми "".',
+  medium: 'headline 3-5 слов + cta 2-3 слова. offer оставь пустым "".',
+  full: 'headline 4-5 слов + offer до 7 слов + cta 2-3 слова. Максимум 15 слов всего.',
 };
 
 async function generateBannerText(
@@ -64,7 +64,7 @@ async function generateBannerText(
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   const offerInstruction = offer
-    ? `\nОффер клиента: "${offer}"\nАдаптируй этот оффер под стиль архетипа, НЕ меняя ключевой смысл и конкретные факты (числа, сроки, условия).`
+    ? `\nАдаптируй этот оффер КОРОТКО (максимум 7 слов): "${offer}"`
     : '';
 
   const toneInstruction = toneOfVoice && toneInstructions[toneOfVoice]
@@ -76,19 +76,25 @@ async function generateBannerText(
     max_tokens: 300,
     messages: [{
       role: 'user',
-      content: `Ты копирайтер. Придумай текст для рекламного баннера.
+      content: `Ты — арт-директор рекламного агентства. Твоя задача — написать МИНИМУМ текста для визуального баннера. Баннер — это картинка, не статья. Каждое лишнее слово убивает дизайн.
+
+Уровень текста: ${levelDescriptions[textRules.level]}
+
+ЖЁСТКИЕ ПРАВИЛА:
+- headline: МАКСИМУМ 5 слов. Лучше 3-4. Это главный крючок.
+- offer: МАКСИМУМ 7 слов. Только суть. Если нечего сказать — оставь пустым "".
+- cta: МАКСИМУМ 3 слова. Глагол + существительное.
+- ОБЩИЙ ЛИМИТ: не больше 15 слов на весь баннер.
+- НЕ используй кавычки внутри текста.
+- НЕ ставь точку в конце headline и cta.
+- Пиши как для билборда на трассе — водитель видит 2 секунды.
 
 Бриф: ${brief}
 Архетип: ${archetype}
-Уровень текста: ${levelDescriptions[textRules.level]}
 Стиль текста: ${styleDescriptions[textRules.style]}${toneInstruction}${offerInstruction}
 
-Верни ТОЛЬКО валидный JSON без пояснений:
-{
-  "headline": "${textRules.level === 'minimal' ? 'название бренда или слоган (1-3 слова)' : 'заголовок'}",
-  "offer": "${textRules.includeOffer ? 'оффер или подзаголовок' : ''}",
-  "cta": "${textRules.includeCta ? 'призыв к действию' : ''}"
-}`,
+Верни ТОЛЬКО валидный JSON:
+{"headline": "...", "offer": "...", "cta": "..."}`,
     }],
   });
 
