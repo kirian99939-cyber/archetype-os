@@ -4,7 +4,7 @@ import { useState, useRef, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import { ARCHETYPES } from '@/lib/archetypes';
 import { BANNER_FORMATS } from '@/lib/project-types';
-import type { ProjectData, BannerGroup } from '@/lib/project-types';
+import type { ProjectData, BannerGroup, Brief } from '@/lib/project-types';
 import { useBannerGeneration, MAX_REFRESHES_PER_BANNER } from '@/hooks/useBannerGeneration';
 import type { NewHypothesis } from '@/app/api/analyze/route';
 import type { ArchetypeDefinition } from '@/lib/archetypes';
@@ -14,6 +14,13 @@ import LoadingMessages from '@/components/LoadingMessages';
 const ACCENT = '#C8FF00';
 const ACCENT_BG = 'rgba(200,255,0,0.1)';
 const ACCENT_BORDER = 'rgba(200,255,0,0.25)';
+
+const TONE_OF_VOICE = [
+  { id: 'friendly', label: 'На «ты»', icon: '😊' },
+  { id: 'formal', label: 'На «вы»', icon: '🤝' },
+  { id: 'provocative', label: 'Провокационный', icon: '🔥' },
+  { id: 'expert', label: 'Экспертный', icon: '🎯' },
+];
 
 type Tab = 'brief' | 'archetypes' | 'hypotheses' | 'banners';
 
@@ -28,9 +35,50 @@ interface ProjectWorkspaceProps {
   project: ProjectData;
 }
 
-export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
+export default function ProjectWorkspace({ project: initialProject }: ProjectWorkspaceProps) {
+  const [project, setProject] = useState(initialProject);
   const [activeTab, setActiveTab] = useState<Tab>('banners');
   const projectIdRef = useRef<string | null>(project.id);
+
+  // ── Brief editing ──
+  const [isEditingBrief, setIsEditingBrief] = useState(false);
+  const [editedBrief, setEditedBrief] = useState<Brief>(() => project.brief ?? {
+    product: '', price: '', audience: '', goal: '', utp: '', offer: '',
+    toneOfVoice: 'friendly', platforms: [], context: '',
+    visualMode: 'ai' as const, imageUrls: [], imageLink: '',
+  });
+  const [savingBrief, setSavingBrief] = useState(false);
+
+  const handleSaveBrief = async () => {
+    setSavingBrief(true);
+    try {
+      const res = await fetch(`/api/projects/${project.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brief: editedBrief,
+          title: editedBrief.product || project.title,
+        }),
+      });
+      if (res.ok) {
+        setProject(prev => ({ ...prev, brief: editedBrief, title: editedBrief.product || prev.title }));
+        setIsEditingBrief(false);
+      }
+    } catch (err) {
+      console.error('Failed to save brief:', err);
+    } finally {
+      setSavingBrief(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditingBrief(false);
+    setEditedBrief(project.brief ?? {
+      product: '', price: '', audience: '', goal: '', utp: '', offer: '',
+      toneOfVoice: 'friendly', platforms: [], context: '',
+      visualMode: 'ai' as const, imageUrls: [], imageLink: '',
+    });
+  };
 
   // Подготовка данных для хука
   const brief = project.brief ?? {
@@ -238,31 +286,182 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
       )}
 
       {/* ═══════════ TAB: BRIEF ═══════════ */}
-      {activeTab === 'brief' && project.brief && (
+      {activeTab === 'brief' && (
         <div className="glass-card p-6 space-y-4">
-          <h3 className="text-white font-semibold text-lg mb-2">Бриф проекта</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[
-              { label: 'Продукт', value: project.brief.product },
-              { label: 'Цена', value: project.brief.price },
-              { label: 'Аудитория', value: project.brief.audience },
-              { label: 'Цель', value: project.brief.goal },
-              { label: 'УТП', value: project.brief.utp },
-              { label: 'Оффер', value: project.brief.offer },
-              { label: 'Tone of Voice', value: project.brief.toneOfVoice },
-              { label: 'Платформы', value: project.brief.platforms?.join(', ') },
-            ].filter(f => f.value).map(field => (
-              <div key={field.label} className="space-y-1">
-                <p className="text-white/40 text-xs font-medium uppercase tracking-wider">{field.label}</p>
-                <p className="text-white/80 text-sm">{field.value}</p>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-white font-semibold text-lg">Бриф проекта</h3>
+            {!isEditingBrief ? (
+              <button
+                onClick={() => setIsEditingBrief(true)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm transition-all hover:border-white/20"
+                style={{
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  color: 'rgba(255,255,255,0.6)',
+                }}
+              >
+                ✏️ Редактировать
+              </button>
+            ) : (
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSaveBrief}
+                  disabled={savingBrief}
+                  className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-sm font-semibold transition-all"
+                  style={{ background: ACCENT, color: '#0A0A0A', opacity: savingBrief ? 0.6 : 1 }}
+                >
+                  {savingBrief ? '...' : 'Сохранить'}
+                </button>
+                <button
+                  onClick={handleCancelEdit}
+                  className="px-4 py-2 rounded-lg text-sm transition-all"
+                  style={{
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: 'rgba(255,255,255,0.6)',
+                  }}
+                >
+                  Отмена
+                </button>
               </div>
-            ))}
+            )}
           </div>
-          {project.brief.context && (
-            <div className="space-y-1">
-              <p className="text-white/40 text-xs font-medium uppercase tracking-wider">Контекст</p>
-              <p className="text-white/80 text-sm">{project.brief.context}</p>
+
+          {isEditingBrief ? (
+            /* ── Режим редактирования ── */
+            <div className="space-y-4">
+              {([
+                { key: 'product' as const, label: 'Продукт', placeholder: 'Что продаёте?', multiline: false },
+                { key: 'price' as const, label: 'Цена', placeholder: 'Цена или сегмент', multiline: false },
+                { key: 'audience' as const, label: 'Аудитория', placeholder: 'Кому продаёте?', multiline: true },
+                { key: 'goal' as const, label: 'Цель', placeholder: 'Цель рекламы', multiline: false },
+                { key: 'utp' as const, label: 'УТП', placeholder: 'Уникальное торговое предложение', multiline: true },
+                { key: 'offer' as const, label: 'Оффер', placeholder: 'Оффер для рекламы', multiline: true },
+              ]).map(field => (
+                <div key={field.key} className="space-y-1.5">
+                  <label className="text-white/40 text-xs font-medium uppercase tracking-wider">{field.label}</label>
+                  {field.multiline ? (
+                    <textarea
+                      value={editedBrief[field.key] || ''}
+                      onChange={e => setEditedBrief(prev => ({ ...prev, [field.key]: e.target.value }))}
+                      placeholder={field.placeholder}
+                      rows={3}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        background: 'rgba(255,255,255,0.05)',
+                        border: `1px solid rgba(200,255,0,0.2)`,
+                        borderRadius: 10,
+                        color: '#fff',
+                        fontSize: 14,
+                        resize: 'vertical',
+                        outline: 'none',
+                      }}
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      value={editedBrief[field.key] || ''}
+                      onChange={e => setEditedBrief(prev => ({ ...prev, [field.key]: e.target.value }))}
+                      placeholder={field.placeholder}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        background: 'rgba(255,255,255,0.05)',
+                        border: `1px solid rgba(200,255,0,0.2)`,
+                        borderRadius: 10,
+                        color: '#fff',
+                        fontSize: 14,
+                        outline: 'none',
+                      }}
+                    />
+                  )}
+                </div>
+              ))}
+
+              {/* Tone of Voice — чипы */}
+              <div className="space-y-1.5">
+                <label className="text-white/40 text-xs font-medium uppercase tracking-wider">Tone of Voice</label>
+                <div className="flex flex-wrap gap-2">
+                  {TONE_OF_VOICE.map(t => {
+                    const active = editedBrief.toneOfVoice === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setEditedBrief(prev => ({ ...prev, toneOfVoice: t.id }))}
+                        style={{
+                          padding: '8px 16px',
+                          borderRadius: 12,
+                          fontSize: 14,
+                          cursor: 'pointer',
+                          border: `1.5px solid ${active ? ACCENT : 'rgba(255,255,255,0.1)'}`,
+                          background: active ? ACCENT_BG : 'rgba(255,255,255,0.04)',
+                          color: active ? ACCENT : 'rgba(255,255,255,0.55)',
+                          fontWeight: active ? 600 : 400,
+                          transition: 'all .15s',
+                        }}
+                      >
+                        {t.icon} {t.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Контекст */}
+              <div className="space-y-1.5">
+                <label className="text-white/40 text-xs font-medium uppercase tracking-wider">Контекст</label>
+                <textarea
+                  value={editedBrief.context || ''}
+                  onChange={e => setEditedBrief(prev => ({ ...prev, context: e.target.value }))}
+                  placeholder="Дополнительный контекст"
+                  rows={2}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    background: 'rgba(255,255,255,0.05)',
+                    border: `1px solid rgba(200,255,0,0.2)`,
+                    borderRadius: 10,
+                    color: '#fff',
+                    fontSize: 14,
+                    resize: 'vertical',
+                    outline: 'none',
+                  }}
+                />
+              </div>
             </div>
+          ) : project.brief ? (
+            /* ── Режим просмотра ── */
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[
+                  { label: 'Продукт', value: project.brief.product },
+                  { label: 'Цена', value: project.brief.price },
+                  { label: 'Аудитория', value: project.brief.audience },
+                  { label: 'Цель', value: project.brief.goal },
+                  { label: 'УТП', value: project.brief.utp },
+                  { label: 'Оффер', value: project.brief.offer },
+                  { label: 'Tone of Voice', value: TONE_OF_VOICE.find(t => t.id === project.brief?.toneOfVoice)
+                    ? `${TONE_OF_VOICE.find(t => t.id === project.brief?.toneOfVoice)!.icon} ${TONE_OF_VOICE.find(t => t.id === project.brief?.toneOfVoice)!.label}`
+                    : project.brief.toneOfVoice },
+                  { label: 'Платформы', value: project.brief.platforms?.join(', ') },
+                ].filter(f => f.value).map(field => (
+                  <div key={field.label} className="space-y-1">
+                    <p className="text-white/40 text-xs font-medium uppercase tracking-wider">{field.label}</p>
+                    <p className="text-white/80 text-sm">{field.value}</p>
+                  </div>
+                ))}
+              </div>
+              {project.brief.context && (
+                <div className="space-y-1">
+                  <p className="text-white/40 text-xs font-medium uppercase tracking-wider">Контекст</p>
+                  <p className="text-white/80 text-sm">{project.brief.context}</p>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-white/35 text-sm">Бриф не заполнен</p>
           )}
         </div>
       )}
