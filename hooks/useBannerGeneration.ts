@@ -184,7 +184,7 @@ export function useBannerGeneration({
               gi !== groupIndex ? g : {
                 ...g,
                 banners: g.banners.map(b =>
-                  b.key === fmtKey ? { ...b, loading: false, error: 'Ошибка сети при поллинге' } : b
+                  b.key === fmtKey ? { ...b, loading: false, error: 'Ошибка сети. Кредиты списаны — баннер может появиться позже.' } : b
                 ),
               }
             )
@@ -318,12 +318,13 @@ export function useBannerGeneration({
             await new Promise(resolve => setTimeout(resolve, 2000));
           }
         } catch (err) {
+          const errMsg = err instanceof Error ? err.message : 'Генерация не удалась. Кредиты не списаны — попробуйте ещё раз.';
           setBannerGroups(prev =>
             prev.map((g, gi) =>
               gi !== groupIndex ? g : {
                 ...g,
                 banners: g.banners.map(b =>
-                  b.key === fmt.key ? { ...b, loading: false, error: err instanceof Error ? err.message : 'Ошибка запуска' } : b
+                  b.key === fmt.key ? { ...b, loading: false, error: errMsg } : b
                 ),
               }
             )
@@ -440,12 +441,13 @@ export function useBannerGeneration({
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
       } catch (err) {
+        const errMsg = err instanceof Error ? err.message : 'Генерация не удалась. Кредиты не списаны — попробуйте ещё раз.';
         setBannerGroups(prev =>
           prev.map((g, gi) =>
             gi !== newGroupIndex ? g : {
               ...g,
               banners: g.banners.map(b =>
-                b.key === fmt.key ? { ...b, loading: false, error: err instanceof Error ? err.message : 'Ошибка запуска' } : b
+                b.key === fmt.key ? { ...b, loading: false, error: errMsg } : b
               ),
             }
           )
@@ -588,7 +590,7 @@ export function useBannerGeneration({
                 ...b,
                 loading: false,
                 imageUrl: prevUrl ?? b.imageUrl,
-                error: err instanceof Error ? err.message : 'Ошибка обновления',
+                error: err instanceof Error ? err.message : 'Генерация не удалась. Кредиты не списаны — попробуйте ещё раз.',
                 previousVersions: prevUrl ? b.previousVersions.slice(0, -1) : b.previousVersions,
                 refreshCount: b.refreshCount - 1,
               };

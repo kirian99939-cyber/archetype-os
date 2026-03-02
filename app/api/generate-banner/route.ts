@@ -268,16 +268,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Проверяем баланс ПЕРЕД любым вызовом NanoBanana (нужно минимум 10 кредитов)
+    // НО не списываем — списание только ПОСЛЕ успешной генерации
     if (dbUser.credits < 10) {
       return NextResponse.json({ error: 'NO_CREDITS', required: 10, available: dbUser.credits }, { status: 402 });
     }
-
-    // Списываем 10 кредитов за каждый баннер
-    const spent = await spendCredits(dbUser.id, 10);
-    if (!spent) {
-      return NextResponse.json({ error: 'NO_CREDITS', required: 10, available: dbUser.credits }, { status: 402 });
-    }
-    console.log(`[Credits] Spent 10 credits for user ${dbUser.id}. Was: ${dbUser.credits}, now: ${dbUser.credits - 10}`);
 
     // Генерируем текст через Claude если есть textRules для архетипа
     let bannerText: BannerText | null = null;
@@ -326,8 +320,10 @@ export async function POST(req: NextRequest) {
       const errorData = await res.json().catch(() => ({}));
       console.log('[generate-banner] NanoBanana error body:', JSON.stringify(errorData).slice(0, 500));
       const errorMessage = errorData?.message ?? res.statusText;
+      // Генерация не удалась — кредиты НЕ списаны
+      console.log(`[Credits] Generation failed for user ${dbUser.id}, credits NOT deducted`);
       return NextResponse.json(
-        { error: `NanoBanana API error (${res.status}): ${errorMessage}` },
+        { error: `Генерация не удалась. Кредиты не списаны — попробуйте ещё раз. (${res.status}: ${errorMessage})` },
         { status: res.status }
       );
     }
@@ -337,15 +333,31 @@ export async function POST(req: NextRequest) {
 
     const taskId = data?.data?.taskId;
     if (!taskId) {
-      throw new Error('No taskId in NanoBanana API response');
+      // Нет taskId — кредиты НЕ списаны
+      console.log(`[Credits] No taskId for user ${dbUser.id}, credits NOT deducted`);
+      return NextResponse.json(
+        { error: 'Генерация не удалась. Кредиты не списаны — попробуйте ещё раз.' },
+        { status: 500 }
+      );
+    }
+
+    // Генерация успешна — ТЕПЕРЬ списываем кредиты (оптимистичная блокировка)
+    const spent = await spendCredits(dbUser.id, 10);
+    if (!spent) {
+      // Генерация прошла, но кредиты не списались (параллельный запрос изменил баланс)
+      // Лучше отдать результат, чем потерять и генерацию, и кредиты
+      console.error(`[Credits] WARN: Generation succeeded but credit deduction failed for user ${dbUser.id}. TaskId: ${taskId}`);
+    } else {
+      console.log(`[Credits] Spent 10 credits for user ${dbUser.id} AFTER successful generation. Was: ${dbUser.credits}, now: ${dbUser.credits - 10}. TaskId: ${taskId}`);
     }
 
     return NextResponse.json({ taskId, prompt: imagePrompt } satisfies GenerateBannerResponse);
   } catch (error) {
-    console.error('Generate banner API error:', error);
+    // Генерация упала — кредиты НЕ списаны
+    console.error('Generate banner API error (credits NOT deducted):', error);
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { error: message || 'Internal server error' },
+      { error: `Генерация не удалась. Кредиты не списаны — попробуйте ещё раз.${message ? ` (${message})` : ''}` },
       { status: 500 }
     );
   }

@@ -538,7 +538,7 @@ export default function NewProject({ onBusyChange, initialProject }: NewProjectP
       lastHypothesesArchetype.current = archetypes.map(a => a.id).sort().join(',') + '|' + hybridsKey;
       setSelectedHypotheses(new Set(Array.from({ length: Math.min(allHypotheses.length, 10) }, (_, i) => i)));
     } catch (err) {
-      setHypothesesError(err instanceof Error ? err.message : 'Ошибка генерации гипотез');
+      setHypothesesError(err instanceof Error ? err.message : 'Генерация не удалась. Кредиты не списаны — попробуйте ещё раз.');
     } finally {
       setHypothesesLoading(false);
     }
@@ -1278,7 +1278,7 @@ export default function NewProject({ onBusyChange, initialProject }: NewProjectP
           ) : hypothesesError ? (
             <div className="glass-card p-10 text-center">
               <div className="text-3xl mb-3">⚠️</div>
-              <p className="text-red-400 text-sm mb-4">{hypothesesError}</p>
+              <p className="text-amber-400 text-sm mb-4">{hypothesesError}</p>
               <button
                 onClick={() => selectedArchetypes.length > 0 && handleGenerateHypotheses(selectedArchetypes)}
                 className="btn-primary text-sm px-6"
@@ -1645,12 +1645,12 @@ export default function NewProject({ onBusyChange, initialProject }: NewProjectP
                       </div>
                     )}
                     {banner.error && !banner.imageUrl && (
-                      <p className="text-red-400 text-xs text-center p-3 leading-relaxed">{banner.error}</p>
+                      <p className={`text-xs text-center p-3 leading-relaxed ${banner.error.includes('Недостаточно кредитов') ? 'text-red-400' : 'text-amber-400'}`}>{banner.error}</p>
                     )}
                   </div>
                   {/* Ошибка под изображением (если есть и imageUrl, и error — при рефреше) */}
                   {banner.error && banner.imageUrl && (
-                    <p className="text-red-400 text-xs text-center leading-relaxed">{banner.error}</p>
+                    <p className={`text-xs text-center leading-relaxed ${banner.error.includes('Недостаточно кредитов') ? 'text-red-400' : 'text-amber-400'}`}>{banner.error}</p>
                   )}
 
                   {/* Actions */}
