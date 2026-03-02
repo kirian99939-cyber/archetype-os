@@ -85,13 +85,20 @@ export default function AdminPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<'overview' | 'users' | 'activity' | 'analytics'>('overview');
+  const [tab, setTab] = useState<'overview' | 'users' | 'activity' | 'analytics' | 'banners'>('overview');
   const [enrichedUsers, setEnrichedUsers] = useState<EnrichedUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [sortBy, setSortBy] = useState<'date' | 'credits' | 'banners'>('date');
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('week');
+
+  // Галерея баннеров
+  const [galleryBanners, setGalleryBanners] = useState<any[]>([]);
+  const [galleryTotal, setGalleryTotal] = useState(0);
+  const [galleryPage, setGalleryPage] = useState(1);
+  const [galleryLoading, setGalleryLoading] = useState(false);
+  const [selectedBanner, setSelectedBanner] = useState<any | null>(null);
 
   useEffect(() => {
     fetch('/api/admin/stats')
@@ -114,6 +121,20 @@ export default function AdminPage() {
       .catch(() => {})
       .finally(() => setAnalyticsLoading(false));
   }, [tab, analytics]);
+
+  // Загружаем баннеры при переключении на таб
+  useEffect(() => {
+    if (tab !== 'banners') return;
+    setGalleryLoading(true);
+    fetch(`/api/admin/banners?page=${galleryPage}&limit=50`)
+      .then(r => r.json())
+      .then(d => {
+        setGalleryBanners(d.banners || []);
+        setGalleryTotal(d.total || 0);
+      })
+      .catch(() => {})
+      .finally(() => setGalleryLoading(false));
+  }, [tab, galleryPage]);
 
   // Загружаем обогащённых пользователей при переключении на таб
   useEffect(() => {
@@ -172,6 +193,7 @@ export default function AdminPage() {
           { id: 'overview', label: '📊 Обзор' },
           { id: 'analytics', label: '📈 Аналитика' },
           { id: 'users', label: '👥 Пользователи' },
+          { id: 'banners', label: '🎨 Баннеры' },
           { id: 'activity', label: '📉 Активность' },
         ] as { id: typeof tab; label: string }[]).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
@@ -468,6 +490,187 @@ export default function AdminPage() {
               </table>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ═══ БАННЕРЫ ═══ */}
+      {tab === 'banners' && (
+        <div className="space-y-6">
+          {/* Счётчик + пагинация */}
+          <div className="flex items-center justify-between">
+            <p className="text-white/50 text-sm">
+              Всего баннеров: <span className="font-semibold" style={{ color: ACCENT }}>{galleryTotal}</span>
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setGalleryPage(p => Math.max(1, p - 1))}
+                disabled={galleryPage === 1}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                style={{
+                  background: 'rgba(255,255,255,0.08)',
+                  color: 'rgba(255,255,255,0.5)',
+                  opacity: galleryPage === 1 ? 0.3 : 1,
+                }}
+              >
+                ← Назад
+              </button>
+              <span className="text-white/40 text-xs px-2">Стр. {galleryPage}</span>
+              <button
+                onClick={() => setGalleryPage(p => p + 1)}
+                disabled={galleryBanners.length < 50}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                style={{
+                  background: 'rgba(255,255,255,0.08)',
+                  color: 'rgba(255,255,255,0.5)',
+                  opacity: galleryBanners.length < 50 ? 0.3 : 1,
+                }}
+              >
+                Вперёд →
+              </button>
+            </div>
+          </div>
+
+          {/* Сетка */}
+          {galleryLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <AnimatedLogo size={36} inline />
+            </div>
+          ) : galleryBanners.length === 0 ? (
+            <div className="glass-card p-10 text-center">
+              <p className="text-white/35 text-sm">Баннеров пока нет</p>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                gap: 16,
+              }}
+            >
+              {galleryBanners.map((banner, i) => (
+                <div
+                  key={i}
+                  onClick={() => setSelectedBanner(banner)}
+                  className="rounded-xl overflow-hidden cursor-pointer transition-all"
+                  style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.borderColor = ACCENT_BORDER)}
+                  onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)')}
+                >
+                  {/* Превью */}
+                  <div style={{ position: 'relative', paddingBottom: '100%', background: '#111' }}>
+                    <img
+                      src={banner.imageUrl}
+                      alt=""
+                      style={{
+                        position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                        objectFit: 'cover',
+                      }}
+                      loading="lazy"
+                    />
+                  </div>
+                  {/* Мета */}
+                  <div style={{ padding: 12 }}>
+                    <div
+                      className="text-xs font-medium mb-1 truncate"
+                      style={{ color: ACCENT }}
+                    >
+                      {banner.hypothesisTitle || 'Без гипотезы'}
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-2">
+                      {banner.userAvatar && (
+                        <img src={banner.userAvatar} alt="" className="rounded-full" style={{ width: 16, height: 16 }} />
+                      )}
+                      <span className="text-[11px] text-white/40 truncate">{banner.userName}</span>
+                      <span className="text-[11px] text-white/20 ml-auto shrink-0">
+                        {new Date(banner.createdAt).toLocaleDateString('ru-RU')}
+                      </span>
+                    </div>
+                    {banner.formatLabel && (
+                      <span
+                        className="inline-block mt-1.5 px-2 py-0.5 rounded text-[10px]"
+                        style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.4)' }}
+                      >
+                        {banner.formatLabel}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Модалка при клике на баннер */}
+          {selectedBanner && (
+            <div
+              onClick={() => setSelectedBanner(null)}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(6px)' }}
+            >
+              <div
+                onClick={e => e.stopPropagation()}
+                className="glass-card max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6"
+                style={{ border: `1px solid ${ACCENT_BORDER}` }}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-white font-bold text-lg truncate pr-4">
+                    {selectedBanner.projectTitle}
+                  </h3>
+                  <button
+                    onClick={() => setSelectedBanner(null)}
+                    className="text-white/40 hover:text-white/60 text-xl shrink-0"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Полное изображение */}
+                <img
+                  src={selectedBanner.imageUrl}
+                  alt=""
+                  className="w-full rounded-xl mb-4"
+                />
+
+                {/* Детали */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-white/40 text-[11px] mb-0.5">Гипотеза</p>
+                    <p className="text-white text-sm">{selectedBanner.hypothesisTitle || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-white/40 text-[11px] mb-0.5">Архетип</p>
+                    <p className="text-sm" style={{ color: ACCENT }}>{selectedBanner.archetype || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-white/40 text-[11px] mb-0.5">Формат</p>
+                    <p className="text-white text-sm">{selectedBanner.formatLabel || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-white/40 text-[11px] mb-0.5">Автор</p>
+                    <div className="flex items-center gap-1.5">
+                      {selectedBanner.userAvatar && (
+                        <img src={selectedBanner.userAvatar} alt="" className="rounded-full" style={{ width: 18, height: 18 }} />
+                      )}
+                      <span className="text-white text-sm">{selectedBanner.userName}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Ссылка на оригинал */}
+                <a
+                  href={selectedBanner.imageUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 mt-4 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                  style={{ background: ACCENT, color: '#0A0A0A' }}
+                >
+                  ↗ Открыть оригинал
+                </a>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
