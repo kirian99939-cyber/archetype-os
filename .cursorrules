@@ -1,0 +1,26 @@
+# Creatika (archetype-os) — правила для AI
+
+## Документация
+- ARCHITECTURE.md — архитектура и pipeline
+- PROJECT_CONTEXT.md — полный контекст проекта
+- SESSION_CONTEXT.md — контекст сессии и правила
+
+## Критические файлы (НЕ МЕНЯТЬ без тестирования на /test):
+- app/api/generate-banner/route.ts
+- app/api/banner-status/route.ts
+- hooks/useBannerGeneration.ts
+
+## Стек
+- Next.js 14, Supabase, Vercel Hobby, NanoBanana API, Claude API
+- Все API routes: export const dynamic = 'force-dynamic'
+- Supabase: .maybeSingle() вместо .single() если запись может не существовать
+
+## NanoBanana API
+- Docs: https://docs.nanobananaapi.ai/
+- generate-pro -> record-info polling (successFlag: 0=pending, 1=done)
+- Готовый результат: data.response.resultImageUrl
+- Генерация: 15-60 сек, polling каждые 5 сек
+
+## Тестирование
+- /test — прямая генерация без pipeline, для диагностики
+- Всегда проверять Vercel Logs после деплоя

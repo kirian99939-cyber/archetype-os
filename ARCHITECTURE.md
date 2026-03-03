@@ -1,7 +1,7 @@
 # Archetype OS — Архитектура проекта
 
 > Живой документ. Обновляется при каждом значимом изменении проекта.
-> Последнее обновление: 25.02.2026
+> Последнее обновление: 03.03.2026
 
 ---
 
@@ -36,8 +36,8 @@
 ### Блок 2 — Подбор архетипа
 **Что делает:** анализирует бриф через Claude API и рекомендует подходящий архетип из 26 вариантов. Также можно выбрать архетип вручную.
 
-**26 архетипов:**
-Мем, Трендовый, Эстетический, Кринжовый, WOW-архетип, Кислотный, Жиза, Премиум, Ностальгический, Сюжетный, Соцдоказательство, Шок/провокация, Научный, ASMR/Мягкий, Геймификация, AI-Сюрреализм, Культурный код, Гиперболизация, Синематический, Котоархетип, Экологичный, Милота, POV, Ассоциация с персоной, Чем хуже тем лучше
+**27 архетипов:**
+Мем, Трендовый, Эстетический, Кринжовый, WOW-архетип, Кислотный, Жиза, Премиум, Ностальгический, Сюжетный, Соцдоказательство, Шок/провокация, Научный, ASMR/Мягкий, Геймификация, AI-Сюрреализм, Культурный код, Гиперболизация, Синематический, Котоархетип, Экологичный, Милота, POV, Ассоциация с персоной, Чем хуже тем лучше, Соблазн, Чёрный ящик
 
 **Статус:** ✅ Работает  
 **Файлы:**
@@ -61,26 +61,30 @@
 ---
 
 ### Блок 4 — Генерация баннеров
-**Что делает:** генерирует 3 баннера в разных форматах на основе выбранной гипотезы.
+**Что делает:** генерирует баннеры в 6 форматах на основе выбранных гипотез.
 
-**Форматы:**
-- Feed 1:1 (квадрат для ленты)
-- Stories 9:16 (вертикальный)
-- Banner 16:9 (горизонтальный)
+**6 форматов:**
+- 1080x1080 — Лента квадрат
+- 1080x1350 — Лента вертикальный
+- 1080x1920 — Stories / Клипы
+- 1920x1080 — Горизонтальный
+- 1080x607 — Пост широкий
+- 240x400 — РСЯ баннер
 
 **Как работает:**
-1. `POST /api/generate-banner` → отправляет задачу в NanoBanana API → возвращает `taskId`
-2. Браузер делает polling `GET /api/banner-status?taskId=xxx` каждые 5 секунд
+1. `POST /api/generate-banner` → Claude (текст баннера) → NanoBanana generate-pro → `taskId`
+2. Браузер делает polling `GET /api/banner-status?taskId=xxx` каждые 5 секунд (MAX_POLL=40)
 3. Когда `successFlag === 1` → показывает картинку из `data.response.resultImageUrl`
 
-**Статус:** ✅ Работает  
+**Статус:** ✅ Работает
 **Файлы:**
-- `components/NewProject.tsx` (шаг 4, UI + polling)
-- `app/api/generate-banner/route.ts` (запуск задачи)
-- `app/api/banner-status/route.ts` (проверка статуса)
+- `hooks/useBannerGeneration.ts` (фронт: запуск + polling)
+- `app/api/generate-banner/route.ts` (Claude текст + NanoBanana изображение)
+- `app/api/banner-status/route.ts` (polling через NanoBanana record-info)
+- `components/ProjectWorkspace.tsx` (отображение баннеров в проекте)
+- `components/NewProject.tsx` (шаг 4, UI визарда)
 
 **Известные проблемы:**
-- Реселлер показывает "Nano Banana" в логах вместо "Nano Banana Pro" (UI баг реселлера, модель Pro используется — `operationType: nano-banana-pro_1K_2k`)
 - Картинки хранятся на серверах реселлера временно — нужно скачивать
 
 ---
@@ -88,9 +92,8 @@
 ### Блок 5 — История генераций
 **Что делает:** показывает список всех созданных проектов с результатами.
 
-**Статус:** 🔴 Заглушка (мок-данные)  
-**Файл:** `components/HistoryPage.tsx`  
-**Приоритет:** средний
+**Статус:** ✅ Работает (реальные данные из Supabase)
+**Файл:** `components/HistoryPage.tsx`
 
 ---
 
@@ -117,17 +120,20 @@
 
 | Сервис | Модель | Для чего | Ключ | Лимиты |
 |--------|--------|----------|------|---------|
-| Anthropic Claude | claude-3-5-sonnet | Анализ брифа, гипотезы | `ANTHROPIC_API_KEY` | $5 кредит |
+| Anthropic Claude | claude-opus-4-6 | Анализ брифа, гипотезы, текст баннеров | `ANTHROPIC_API_KEY` | По токенам |
 | NanoBanana API | nano-banana-pro (Gemini 3 Pro Image) | Генерация баннеров | `NANO_BANANA_API_KEY` | По кредитам |
 | Google Gemini | — | Не используется (заменён NanoBanana) | `GOOGLE_API_KEY` | — |
 
 ---
 
 ### База архетипов
-**Файл:** `lib/archetypes.ts`  
-Единый источник правды для всех 26 архетипов. Содержит поля: `id`, `label`, `icon`, `audience`, `categories`, `formula`, `risk`, `tags`, `platforms`.
+**Файл:** `lib/archetypes.ts`
+Единый источник правды для 27 архетипов. Содержит: `id`, `label`, `icon`, `audience`, `categories`, `formula`, `risk`, `tags`, `platforms`, `textRules`.
 
-При добавлении нового архетипа — редактировать **только этот файл**.
+**Визуальные стили:** `archetypeVisualMap` в `app/api/generate-banner/route.ts`
+**Negative prompts:** `archetypeNegativePrompts` в `app/api/generate-banner/route.ts`
+
+При добавлении нового архетипа — обновить `lib/archetypes.ts` + `archetypeVisualMap` + `archetypeNegativePrompts` (если нужен).
 
 ---
 
@@ -199,23 +205,109 @@ git push
 
 ---
 
+## Pipeline генерации баннеров (КРИТИЧНО)
+
+> Эти файлы — самая хрупкая часть системы. Менять ТОЛЬКО после тестирования на /test
+
+**Файлы (в порядке вызова):**
+1. `hooks/useBannerGeneration.ts` — фронт: запуск + polling (MAX_POLL=40, INTERVAL=5000ms)
+2. `app/api/generate-banner/route.ts` — Claude текст + NanoBanana изображение
+3. `app/api/banner-status/route.ts` — polling через NanoBanana record-info
+4. `components/ProjectWorkspace.tsx` — отображение баннеров
+
+**Поток:**
+```
+Фронт → POST /api/generate-banner → Claude (текст) → NanoBanana generate-pro (taskId)
+Фронт → GET /api/banner-status?taskId=xxx (каждые 5 сек, до 40 раз)
+         → NanoBanana record-info → successFlag === 1 → imageUrl → фронт
+```
+
+---
+
+## NanoBanana API (ресселер nanobananaapi.ai)
+
+**Документация:** https://docs.nanobananaapi.ai/
+
+**Endpoints:**
+- `POST /api/v1/nanobanana/generate-pro` — создание задачи → `{ data: { taskId } }`
+- `GET /api/v1/nanobanana/record-info?taskId=xxx` — статус задачи
+
+**record-info ответ:**
+- `successFlag`: 0 = генерируется, 1 = готово, 2 = ошибка создания, 3 = ошибка генерации
+- Когда готово: `data.response.resultImageUrl` — URL картинки
+- Генерация занимает 15-60 секунд
+
+**Callback (альтернатива polling, пока НЕ используется в проде):**
+- `callBackUrl` передаётся в generate-pro
+- NanoBanana шлёт POST с `data.info.resultImageUrl` (ДРУГОЙ формат чем record-info!)
+- Docs: https://docs.nanobananaapi.ai/nanobanana-api/generate-image-pro-callbacks
+- Endpoint готов: `/api/nanobanana-callback` + таблица `banner_tasks` в Supabase
+
+---
+
+## Тестовая страница /test
+
+Прямая генерация через NanoBanana без основного pipeline.
+Используй для диагностики:
+- `/test` работает, основной flow нет → проблема в нашем коде
+- `/test` не работает → проблема в NanoBanana API или ключе
+
+**Файлы:**
+- `app/test/page.tsx` — UI
+- `app/api/test-generate/route.ts` — API (generate-pro + polling record-info в одном запросе)
+
+---
+
+## Система кредитов (v1.7)
+
+- 10 кредитов = 1 баннер (1 формат)
+- Кредиты списываются ПОСЛЕ успешной генерации (не до)
+- При ошибке генерации кредиты НЕ списываются
+- 100 бесплатных кредитов при регистрации
+- Пополнение через Prodamus
+- Оптимистичный lock: `UPDATE SET credits = credits - 10 WHERE credits = текущее_значение`
+
+---
+
+## Supabase таблицы
+
+**Основные:**
+- `users` — пользователи + кредиты (100 при регистрации)
+- `projects` — проекты с архетипами, гипотезами, баннерами (JSONB)
+
+**Дополнительные:**
+- `banner_tasks` — callback от NanoBanana (task_id PK, status, image_url) — готово, но не в проде
+- `trends` — автообновление трендов для архетипа "trend"
+
+---
+
+## v1.7 изменения (2 марта 2026)
+
+- [x] Кредиты: 10 за баннер, списание после генерации
+- [x] Editable brief в workspace
+- [x] Admin banner gallery
+- [x] Admin analytics dashboard с графиками
+- [x] force-dynamic на всех API routes
+- [x] Тестовая страница /test для NanoBanana
+- [x] Callback endpoint для NanoBanana (готов, не в проде)
+- [x] Rewrite banner text prompt — строгие лимиты слов
+
+---
+
 ## 📋 Бэклог задач
 
 ### 🔴 Высокий приоритет
-- [ ] Сохранение проектов в localStorage / базу данных
-- [ ] История генераций — реальные данные
-- [ ] Авторизация пользователей
+- [ ] Постоянное хранилище баннеров (временные URL от NanoBanana)
+- [ ] Интеграция callback для надёжной доставки баннеров
 
 ### 🟡 Средний приоритет
-- [ ] Улучшить промпты для баннеров (добавить текст на баннер)
-- [ ] Выбор гипотезы перед генерацией баннеров
-- [ ] Показ спиннера во время генерации с таймером
-
-### 🟢 Низкий приоритет
 - [ ] Аналитика на реальных данных
 - [ ] Кастомные архетипы пользователя
+- [ ] Rate limiting на API routes
+
+### 🟢 Низкий приоритет
 - [ ] Экспорт в PDF / ZIP
-- [ ] Биллинг и тарифные планы
+- [ ] Ребрендинг в Creatika (метаданные, тексты)
 
 ---
 

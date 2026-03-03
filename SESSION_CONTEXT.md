@@ -1,5 +1,5 @@
 # SESSION_CONTEXT.md
-> Контекст для продолжения разработки. Обновлён: 2026-02-25.
+> Контекст для продолжения разработки. Обновлён: 2026-03-03.
 > Проект: **Архетип-Протокол** — AI-платформа для генерации рекламных баннеров на основе теории архетипов.
 > Репозиторий: https://github.com/kirian99939-cyber/archetype-os
 > Продакшн: https://archetype-os-tau.vercel.app
@@ -505,3 +505,40 @@ draft → brief → archetype → hypotheses → completed
 - `archetype`: шаг 2 выбран
 - `hypotheses`: шаг 3 выбраны
 - `completed`: баннеры сгенерированы
+
+---
+
+## 16. Правила безопасной разработки
+
+### НИКОГДА:
+1. Не менять `banner-status` и `generate-banner` без тестирования на `/test`
+2. Не менять формат ответа API `{ ready, imageUrl }` — фронт зависит
+3. Не использовать `.single()` в Supabase где запись может не существовать — `.maybeSingle()`
+4. Не полагаться на `maxDuration > 10s` на Vercel Hobby
+5. Не путать форматы NanoBanana: record-info (`data.response.resultImageUrl`) != callback (`data.info.resultImageUrl`)
+
+### ВСЕГДА:
+1. `export const dynamic = 'force-dynamic'` в каждом API route
+2. Тестировать генерацию на `/test` перед деплоем
+3. Проверять Vercel Logs после деплоя
+4. `git stash` / отдельная ветка перед экспериментами
+5. Проверять что Vercel деплой прошёл (не internal error)
+
+### При проблемах с генерацией:
+1. Проверить `/test` — если работает, проблема в нашем коде
+2. Проверить баланс NanoBanana
+3. Проверить Vercel Logs — что возвращает record-info
+4. Проверить что последний деплой успешен
+5. НЕ переписывать banner-status — сначала диагностика
+
+---
+
+## 17. Критические файлы (Pipeline генерации)
+
+Файлы в порядке вызова:
+1. `hooks/useBannerGeneration.ts` — фронт: запуск + polling (MAX_POLL=40, INTERVAL=5000ms)
+2. `app/api/generate-banner/route.ts` — Claude текст + NanoBanana изображение
+3. `app/api/banner-status/route.ts` — polling через NanoBanana record-info
+4. `components/ProjectWorkspace.tsx` — отображение баннеров
+
+Рабочий коммит для отката: `8563f06` (2 марта 2026, 12:51)
