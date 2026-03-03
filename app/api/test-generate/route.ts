@@ -18,7 +18,8 @@ export async function POST(request: Request) {
     body: JSON.stringify({
       prompt,
       aspectRatio: '1:1',
-      resolution: '1K',
+      resolution: '2K',
+      callBackUrl: 'https://archetype-os-tau.vercel.app/api/nanobanana-callback',
     }),
   });
 
