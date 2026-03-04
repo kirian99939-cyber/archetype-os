@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { BANNER_FORMATS } from '@/lib/project-types';
 import type { BannerItem, BannerGroup, Brief } from '@/lib/project-types';
 import type { NewHypothesis } from '@/app/api/analyze/route';
+import { ARCHETYPES } from '@/lib/archetypes';
 
 export const MAX_REFRESHES_PER_BANNER = 3;
 
@@ -225,6 +226,27 @@ export function useBannerGeneration({
         ...f, taskId: null, imageUrl: null, loading: true, error: null, refreshCount: 0, previousVersions: [],
       })),
     }));
+    // Сохраняем текущие баннеры в историю перед перезаписью
+    setBannerHistory(prev => {
+      if (bannerGroups.length === 0) return prev;
+      const archId = selectedArchetypes[0]?.id ?? '';
+      const archDef = ARCHETYPES?.find((a: any) => a.id === archId);
+      const iteration = {
+        iterationId: Date.now().toString(),
+        createdAt: new Date().toISOString(),
+        archetypeId: archId,
+        archetypeLabel: archDef?.label ?? archId,
+        bannerGroups: bannerGroups.map(g => ({
+          hypothesisIndex: g.hypothesisIndex,
+          hypothesisTitle: g.hypothesisTitle,
+          banners: g.banners.map(b => ({
+            key: b.key, label: b.label, sublabel: b.sublabel,
+            imageUrl: b.imageUrl, error: b.error,
+          })),
+        })),
+      };
+      return [iteration, ...prev];
+    });
     bannersSavedRef.current = false;
     setBannerGroups(initialGroups);
     setActiveBannerTab(0);
