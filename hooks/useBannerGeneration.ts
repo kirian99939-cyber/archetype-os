@@ -218,8 +218,6 @@ export function useBannerGeneration({
       }
     } catch {}
 
-    const archetype = (selectedArchetypes[0]?.id || analyzeResult?.primaryArchetype || '').toLowerCase();
-
     const initialGroups: BannerGroup[] = selectedList.map(idx => ({
       hypothesisIndex: idx,
       hypothesisTitle: hypotheses[idx]?.idea || `Гипотеза ${idx + 1}`,
@@ -244,6 +242,7 @@ export function useBannerGeneration({
     for (let groupIndex = 0; groupIndex < selectedList.length; groupIndex++) {
       const hypothesisIdx = selectedList[groupIndex];
       const hypothesis = hypotheses[hypothesisIdx];
+      const archetype = (hypothesis?.archetypeId || selectedArchetypes[0]?.id || analyzeResult?.primaryArchetype || '').toLowerCase();
       const prompt = hypothesis
         ? `${basePrompt}. Гипотеза: ${hypothesis.idea}. Визуал: ${hypothesis.visual}.`
         : basePrompt;
@@ -364,7 +363,7 @@ export function useBannerGeneration({
     setBannerGroups(prev => [...prev, newGroup]);
     setActiveBannerTab(newGroupIndex);
 
-    const archetype = (selectedArchetypes[0]?.id || analyzeResult?.primaryArchetype || '').toLowerCase();
+    const archetype = (hypothesis.archetypeId || selectedArchetypes[0]?.id || analyzeResult?.primaryArchetype || '').toLowerCase();
     const basePrompt = [
       brief.product,
       brief.utp      && `УТП: ${brief.utp}`,
@@ -486,8 +485,8 @@ export function useBannerGeneration({
       }
     } catch {}
 
-    const archetype = (selectedArchetypes[0]?.id || analyzeResult?.primaryArchetype || '').toLowerCase();
     const hypothesis = hypotheses[group.hypothesisIndex];
+    const archetype = (hypothesis?.archetypeId || selectedArchetypes[0]?.id || analyzeResult?.primaryArchetype || '').toLowerCase();
     const basePrompt = [
       brief.product,
       brief.utp      && `УТП: ${brief.utp}`,
