@@ -186,7 +186,7 @@ function buildImagePrompt(req: GenerateBannerRequest, bannerText: BannerText | n
     textInstructions.length > 0
       ? `Include the following text overlays EXACTLY ONCE each — do NOT duplicate any text: ${textInstructions.join('. ')}.`
       : 'No text or typography in the image.',
-    `Optimized composition for ${getAspectRatio(req.width, req.height)} aspect ratio.`,
+    `Optimized composition for ${req.width && req.height ? `${req.width}:${req.height}` : 'standard'} format.`,
     safeZoneHint,
     'ВАЖНО: Весь текст на баннере должен быть ТОЛЬКО на русском языке. Заголовок, CTA кнопка, любой текст — всё только по-русски.',
   ]
