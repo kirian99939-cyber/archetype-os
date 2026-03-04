@@ -85,7 +85,7 @@ export default function AdminPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<'overview' | 'users' | 'activity' | 'analytics' | 'banners'>('overview');
+  const [tab, setTab] = useState<'overview' | 'users' | 'activity' | 'analytics' | 'banners' | 'golden'>('overview');
   const [enrichedUsers, setEnrichedUsers] = useState<EnrichedUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [sortBy, setSortBy] = useState<'date' | 'credits' | 'banners'>('date');
@@ -99,6 +99,13 @@ export default function AdminPage() {
   const [galleryPage, setGalleryPage] = useState(1);
   const [galleryLoading, setGalleryLoading] = useState(false);
   const [selectedBanner, setSelectedBanner] = useState<any | null>(null);
+
+  // Золотые кабинеты
+  const [goldens, setGoldens] = useState<any[]>([]);
+  const [goldensLoading, setGoldensLoading] = useState(false);
+  const [newGoldenEmail, setNewGoldenEmail] = useState('');
+  const [newGoldenCode, setNewGoldenCode] = useState('');
+  const [goldenError, setGoldenError] = useState('');
 
   useEffect(() => {
     fetch('/api/admin/stats')
@@ -135,6 +142,17 @@ export default function AdminPage() {
       .catch(() => {})
       .finally(() => setGalleryLoading(false));
   }, [tab, galleryPage]);
+
+  // Загружаем золотых при переключении на таб
+  useEffect(() => {
+    if (tab !== 'golden') return;
+    setGoldensLoading(true);
+    fetch('/api/admin/golden')
+      .then(r => r.json())
+      .then(d => setGoldens(d.goldens || []))
+      .catch(() => {})
+      .finally(() => setGoldensLoading(false));
+  }, [tab]);
 
   // Загружаем обогащённых пользователей при переключении на таб
   useEffect(() => {
@@ -195,6 +213,7 @@ export default function AdminPage() {
           { id: 'users', label: '👥 Пользователи' },
           { id: 'banners', label: '🎨 Баннеры' },
           { id: 'activity', label: '📉 Активность' },
+          { id: 'golden', label: '👑 Золотые' },
         ] as { id: typeof tab; label: string }[]).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className="px-4 py-2 rounded-xl text-sm font-medium transition-all"
@@ -712,6 +731,180 @@ export default function AdminPage() {
               })}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ═══ ЗОЛОТЫЕ КАБИНЕТЫ ═══ */}
+      {tab === 'golden' && (
+        <div className="space-y-6">
+          {goldensLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <AnimatedLogo size={36} inline />
+            </div>
+          ) : (
+            <>
+              {/* Сводка */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <StatCard label="Золотых" value={`${goldens.length}/5`} />
+                <StatCard label="Рефералов" value={goldens.reduce((s, g) => s + g.referralsCount, 0)} />
+                <StatCard label="Заработано" value={`${goldens.reduce((s, g) => s + g.totalEarned, 0).toLocaleString('ru-RU')} ₽`} />
+                <StatCard label="К выплате" value={`${goldens.reduce((s, g) => s + g.pending, 0).toLocaleString('ru-RU')} ₽`} />
+              </div>
+
+              {/* Список золотых */}
+              {goldens.map(g => (
+                <div key={g.id} className="glass-card p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-white font-semibold flex items-center gap-2">
+                        👑 {g.name || g.email}
+                      </h3>
+                      <p className="text-white/40 text-xs mt-0.5">{g.email}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-white/40">Код: <span className="font-mono" style={{ color: '#FFD700' }}>{g.referral_code}</span></p>
+                      <p className="text-xs text-white/30 mt-0.5">{g.referralsCount} рефералов</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="rounded-xl p-3" style={{ background: 'rgba(255,215,0,0.05)' }}>
+                      <p className="text-white/40 text-[10px]">Заработано</p>
+                      <p className="font-bold" style={{ color: '#FFD700' }}>{g.totalEarned.toLocaleString('ru-RU')} ₽</p>
+                    </div>
+                    <div className="rounded-xl p-3" style={{ background: 'rgba(200,255,0,0.05)' }}>
+                      <p className="text-white/40 text-[10px]">К выплате</p>
+                      <p className="font-bold" style={{ color: ACCENT }}>{g.pending.toLocaleString('ru-RU')} ₽</p>
+                    </div>
+                    <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.03)' }}>
+                      <p className="text-white/40 text-[10px]">Выплачено</p>
+                      <p className="font-bold text-white">{(g.totalEarned - g.pending).toLocaleString('ru-RU')} ₽</p>
+                    </div>
+                  </div>
+
+                  {/* Начисления */}
+                  {g.earnings.length > 0 && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm" style={{ minWidth: 600 }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                            <th className="text-left py-2 px-2 text-white/50 text-[10px] font-semibold">Дата</th>
+                            <th className="text-left py-2 px-2 text-white/50 text-[10px] font-semibold">Email</th>
+                            <th className="text-right py-2 px-2 text-white/50 text-[10px] font-semibold">Платёж</th>
+                            <th className="text-right py-2 px-2 text-white/50 text-[10px] font-semibold">Комиссия</th>
+                            <th className="text-center py-2 px-2 text-white/50 text-[10px] font-semibold">Статус</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {g.earnings.map((e: any) => (
+                            <tr key={e.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                              <td className="py-2 px-2 text-white/40 text-xs">
+                                {new Date(e.created_at).toLocaleDateString('ru-RU')}
+                              </td>
+                              <td className="py-2 px-2 text-white/60 text-xs">{e.referred_user_email}</td>
+                              <td className="py-2 px-2 text-right text-white/50 text-xs">
+                                {e.payment_amount.toLocaleString('ru-RU')} ₽
+                              </td>
+                              <td className="py-2 px-2 text-right text-xs font-semibold" style={{ color: '#FFD700' }}>
+                                +{e.commission.toLocaleString('ru-RU')} ₽
+                              </td>
+                              <td className="py-2 px-2 text-center">
+                                {e.paid_out ? (
+                                  <span className="text-[10px] text-green-400">Выплачено</span>
+                                ) : (
+                                  <button
+                                    onClick={async () => {
+                                      await fetch('/api/admin/golden', {
+                                        method: 'PATCH',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ earningId: e.id }),
+                                      });
+                                      setGoldens(prev => prev.map(gg => {
+                                        if (gg.id !== g.id) return gg;
+                                        return {
+                                          ...gg,
+                                          earnings: gg.earnings.map((ee: any) =>
+                                            ee.id === e.id ? { ...ee, paid_out: true } : ee
+                                          ),
+                                          pending: gg.pending - e.commission,
+                                        };
+                                      }));
+                                    }}
+                                    className="px-2 py-0.5 rounded text-[10px] font-semibold transition-all"
+                                    style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.25)' }}
+                                  >
+                                    Отметить выплаченным
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* Форма назначения */}
+              <div className="glass-card p-6 space-y-4">
+                <h3 className="text-white font-semibold">Назначить золотой статус</h3>
+                {goldenError && (
+                  <p className="text-red-400 text-xs">{goldenError}</p>
+                )}
+                <div className="flex gap-3">
+                  <input
+                    type="email"
+                    placeholder="Email пользователя"
+                    value={newGoldenEmail}
+                    onChange={e => setNewGoldenEmail(e.target.value)}
+                    className="flex-1 px-4 py-2.5 rounded-xl text-sm text-white outline-none"
+                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Реферальный код"
+                    value={newGoldenCode}
+                    onChange={e => setNewGoldenCode(e.target.value)}
+                    className="w-40 px-4 py-2.5 rounded-xl text-sm text-white outline-none"
+                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+                  />
+                  <button
+                    onClick={async () => {
+                      setGoldenError('');
+                      if (!newGoldenEmail || !newGoldenCode) {
+                        setGoldenError('Заполните оба поля');
+                        return;
+                      }
+                      const res = await fetch('/api/admin/golden', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: newGoldenEmail, referralCode: newGoldenCode }),
+                      });
+                      const data = await res.json();
+                      if (!res.ok) {
+                        setGoldenError(data.error || 'Ошибка');
+                        return;
+                      }
+                      setNewGoldenEmail('');
+                      setNewGoldenCode('');
+                      // Перезагружаем
+                      fetch('/api/admin/golden')
+                        .then(r => r.json())
+                        .then(d => setGoldens(d.goldens || []));
+                    }}
+                    className="px-5 py-2.5 rounded-xl text-sm font-semibold shrink-0 transition-all"
+                    style={{ background: '#FFD700', color: '#0A0A0A' }}
+                  >
+                    👑 Назначить
+                  </button>
+                </div>
+                <p className="text-white/20 text-[10px]">
+                  Максимум 5 золотых кабинетов. Пользователь должен быть зарегистрирован.
+                </p>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

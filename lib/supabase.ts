@@ -172,3 +172,64 @@ export async function getProject(projectId: string) {
   }
   return data;
 }
+
+// ─── Golden Cabinets ─────────────────────────────────────────────────────────
+
+/** Возвращает золотой профиль пользователя с его рефералами и начислениями */
+export async function getGoldenProfile(userId: string) {
+  const { data: user } = await supabaseAdmin
+    .from('users')
+    .select('id, email, name, referral_code, is_golden')
+    .eq('id', userId)
+    .eq('is_golden', true)
+    .maybeSingle();
+
+  if (!user) return null;
+
+  const { data: earnings } = await supabaseAdmin
+    .from('referral_earnings')
+    .select('*')
+    .eq('golden_user_id', userId)
+    .order('created_at', { ascending: false });
+
+  const list = earnings ?? [];
+  const totalEarned = list.reduce((s: number, e: any) => s + e.commission, 0);
+  const totalPaid = list.filter((e: any) => e.paid_out).reduce((s: number, e: any) => s + e.commission, 0);
+  const pending = totalEarned - totalPaid;
+
+  return { ...user, earnings: list, totalEarned, totalPaid, pending };
+}
+
+/** Находит золотого владельца по реферальному коду */
+export async function findGoldenByCode(referralCode: string) {
+  const { data } = await supabaseAdmin
+    .from('users')
+    .select('id, email, name, referral_code')
+    .eq('referral_code', referralCode)
+    .eq('is_golden', true)
+    .maybeSingle();
+  return data;
+}
+
+/** Записывает реферальное начисление (25% комиссия) */
+export async function createReferralEarning(params: {
+  goldenUserId: string;
+  referredUserEmail: string;
+  orderId: string;
+  paymentAmount: number;
+}) {
+  const commission = Math.round(params.paymentAmount * 0.25);
+  const { data, error } = await supabaseAdmin
+    .from('referral_earnings')
+    .insert({
+      golden_user_id: params.goldenUserId,
+      referred_user_email: params.referredUserEmail,
+      order_id: params.orderId,
+      payment_amount: params.paymentAmount,
+      commission,
+    })
+    .select()
+    .single();
+  if (error) console.error('[Supabase] createReferralEarning error:', error);
+  return data;
+}

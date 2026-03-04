@@ -13,6 +13,7 @@ import PricingSection from '@/components/PricingSection';
 import BannerLibraryPage from '@/components/BannerLibraryPage';
 import AdminPage from '@/components/AdminPage';
 import ReferralDashboard from '@/components/ReferralDashboard';
+import GoldenPage from '@/components/GoldenPage';
 import AnimatedLogo from '@/components/AnimatedLogo';
 import ChangelogModal, { hasUnseenChangelog } from '@/components/ChangelogModal';
 
@@ -229,7 +230,14 @@ export default function DashboardRoute() {
           {activePage === 'archetypes'  && <ArchetypesPage />}
           {activePage === 'analytics'   && <AnalyticsPage />}
           {activePage === 'banner-library' && <BannerLibraryPage />}
-          {activePage === 'referrals' && <ReferralDashboard />}
+          {activePage === 'referrals' && (
+            <>
+              <GoldenPage />
+              <div className="mt-8">
+                <ReferralDashboard />
+              </div>
+            </>
+          )}
           {activePage === 'pricing'    && (
             <div className="max-w-5xl mx-auto">
               <PricingSection

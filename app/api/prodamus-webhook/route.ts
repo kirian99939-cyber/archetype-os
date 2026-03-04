@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { addCredits } from '@/lib/supabase';
+import { addCredits, findGoldenByCode, createReferralEarning, supabaseAdmin } from '@/lib/supabase';
 
 const PRODAMUS_SECRET = process.env.PRODAMUS_SECRET_KEY || '';
 
@@ -178,6 +178,30 @@ export async function POST(req: NextRequest) {
       console.log(`[prodamus-webhook] ✅ SUCCESS: +${credits} credits for ${customerEmail} (order ${orderId}, sum ${sum})`);
     } else {
       console.error(`[prodamus-webhook] ❌ FAILED to add credits for ${customerEmail}. User not in DB or lock conflict.`);
+    }
+
+    // ─── 10. Реферальное начисление золотому кабинету (25% комиссия) ──────────
+    try {
+      const { data: buyer } = await supabaseAdmin
+        .from('users')
+        .select('referred_by')
+        .eq('email', customerEmail)
+        .maybeSingle();
+
+      if (buyer?.referred_by) {
+        const golden = await findGoldenByCode(buyer.referred_by);
+        if (golden) {
+          await createReferralEarning({
+            goldenUserId: golden.id,
+            referredUserEmail: customerEmail,
+            orderId,
+            paymentAmount: sum,
+          });
+          console.log(`[Referral] +${Math.round(sum * 0.25)}₽ commission for golden ${golden.email}`);
+        }
+      }
+    } catch (refErr) {
+      console.error('[Referral] Error recording earning:', refErr);
     }
 
     console.log('=== PRODAMUS WEBHOOK COMPLETE ===');
