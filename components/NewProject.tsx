@@ -545,7 +545,7 @@ export default function NewProject({ onBusyChange, initialProject }: NewProjectP
   };
 
   useEffect(() => {
-    // Сбрасываем гипотезы при любом изменении выбранных архетипов или гибридов
+    if (step !== 2) return; // Сбрасываем только если активно меняем на шаге 2
     const hybridsKey = selectedHybrids.map(h => h.archetypes.join('×')).sort().join(',');
     const currentKey = selectedArchetypes.map(a => a.id).sort().join(',') + '|' + hybridsKey;
     if (lastHypothesesArchetype.current !== null && lastHypothesesArchetype.current !== currentKey) {
@@ -554,7 +554,7 @@ export default function NewProject({ onBusyChange, initialProject }: NewProjectP
       setHypothesesError(null);
       lastHypothesesArchetype.current = null;
     }
-  }, [selectedArchetypes, selectedHybrids]);
+  }, [selectedArchetypes, selectedHybrids, step]);
 
   // При входе на шаг 3 — генерируем гипотезы если ещё нет
   useEffect(() => {
