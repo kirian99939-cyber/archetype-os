@@ -1385,8 +1385,20 @@ export default function NewProject({ onBusyChange, initialProject }: NewProjectP
                     </div>
 
                     <div>
-                      <SectionLabel>Заголовок</SectionLabel>
-                      <p className="text-white text-sm font-semibold leading-snug">{h.headline}</p>
+                      <SectionLabel>Заголовок ✏️</SectionLabel>
+                      <input
+                        type="text"
+                        value={h.headline}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setHypotheses(prev => prev.map((hyp, j) =>
+                            j === i ? { ...hyp, headline: val } : hyp
+                          ));
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full bg-transparent text-white text-sm font-semibold leading-snug outline-none border-b border-transparent hover:border-white/20 focus:border-[var(--accent)] transition-colors py-0.5"
+                        placeholder="Заголовок баннера"
+                      />
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 mt-auto">
