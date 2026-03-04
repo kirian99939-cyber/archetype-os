@@ -108,12 +108,12 @@ async function generateBannerText(
 }
 
 const SAFE_ZONE_HINTS: Record<string, string> = {
-  stories: 'Layout note: Stories format — avoid placing text in the top 15% (status bar, clock) and bottom 18% (swipe-up area, reply bar). The rest of the image is free for creative text placement — top-third, center, lower-third are all fine.',
-  feed: 'Layout note: Square feed post — avoid placing key text in the bottom 8% where action buttons may overlap. Otherwise text can go anywhere.',
-  feed_vertical: 'Layout note: Vertical feed post — bottom 12% may be partially cropped in some feeds. Place the most important text (headline, CTA) above that zone. Otherwise creative freedom for layout.',
-  banner: 'Layout note: Horizontal banner — avoid the outer 5% margins. Text can be placed freely: left-aligned, centered, right-side — vary the composition.',
-  post_wide: 'Layout note: Wide post format — keep key text within the inner 90% of the image.',
-  rsya_vertical: 'Layout note: Small vertical ad — use large, bold text for readability at small sizes. Keep text concise.',
+  stories: 'Composition note: Keep all text elements in the middle section of the image. Leave clear space at the very top and very bottom edges — place headline, offer and CTA in the center zone only.',
+  feed: 'Composition note: Square composition — keep all key text away from the bottom edge. Text can be placed freely in upper and center areas.',
+  feed_vertical: 'Composition note: Vertical composition — place the most important text in the upper and center areas. Keep bottom edge clean.',
+  banner: 'Composition note: Horizontal wide composition — keep all text within the safe inner area, away from left and right edges. Text can be left-aligned, centered, or right-side.',
+  post_wide: 'Composition note: Wide horizontal composition — keep all text centered and away from outer edges.',
+  rsya_vertical: 'Composition note: Compact vertical format — use large bold text for readability. Keep layout simple and text concise.',
 };
 
 const SIZE_TO_FORMAT: Record<string, string> = {
@@ -132,7 +132,7 @@ const archetypeNegativePrompts: Record<string, string> = {
 
 function buildImagePrompt(req: GenerateBannerRequest, bannerText: BannerText | null, offer?: string, imageUrls?: string[]): string {
   const archetypeVisualMap: Record<string, string> = {
-    mem: 'Meme-style advertising layout. Bold impact font aesthetic, internet culture visual language. Dynamic composition, subject occupying 70% of frame. Bright saturated colors on solid or simple background. High quality commercial photography meets internet humor. Shot with wide angle lens, high contrast, energetic mood.',
+    mem: 'Meme-style advertising layout. Bold impact font aesthetic, internet culture visual language. Dynamic composition, subject dominating the frame. Bright saturated colors on solid or simple background. High quality commercial photography meets internet humor. Shot with wide angle lens, high contrast, energetic mood.',
     trend: 'Social media native advertising aesthetic. Dynamic composition with glitch effects and neon gradients. TikTok/Reels visual language. Purple-pink-blue neon color palette, vibrant and energetic. Looks like organic viral content, not traditional advertising. Modern and culturally relevant.',
     aesthetic: 'Minimalist luxury photography, clean composition with lots of negative space. Soft natural lighting, muted earth tones or monochrome palette. Shot on 85mm lens, shallow depth of field, f/2.0. Editorial magazine quality, calm and sophisticated mood. Premium feel without being flashy.',
     cringe: 'Intentionally kitschy design with retro clip-art aesthetic, over-the-top visual elements. Bright clashing colors, comic sans energy, stock photo irony. Deliberately tacky but self-aware. Mixed media collage style, absurdist humor.',
@@ -186,7 +186,7 @@ function buildImagePrompt(req: GenerateBannerRequest, bannerText: BannerText | n
     textInstructions.length > 0
       ? `Include the following text overlays EXACTLY ONCE each — do NOT duplicate any text: ${textInstructions.join('. ')}.`
       : 'No text or typography in the image.',
-    `Aspect ratio optimized for ${req.width && req.height ? `${req.width}x${req.height}` : '16:9'} banner.`,
+    `Optimized composition for ${getAspectRatio(req.width, req.height)} aspect ratio.`,
     safeZoneHint,
     'ВАЖНО: Весь текст на баннере должен быть ТОЛЬКО на русском языке. Заголовок, CTA кнопка, любой текст — всё только по-русски.',
   ]
