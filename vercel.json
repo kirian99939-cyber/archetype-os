@@ -12,6 +12,9 @@
     },
     "app/api/resize-banner/route.ts": {
       "maxDuration": 60
+    },
+    "app/api/cron/update-trends/route.ts": {
+      "maxDuration": 120
     }
   }
 }

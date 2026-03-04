@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { ARCHETYPES, ARCHETYPE_NAMES_LIST } from '@/lib/archetypes';
+import { getActiveTrends } from '@/lib/trends';
+
+export const dynamic = 'force-dynamic';
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -434,6 +437,21 @@ ${body.toneOfVoice && TONE_INSTRUCTIONS[body.toneOfVoice] ? TONE_INSTRUCTIONS[bo
 
       const allHypotheses: NewHypothesis[] = [];
 
+      // Загружаем актуальные тренды для архетипа "trend"
+      const hasTrendArchetype = archetypesToProcess.some(a => a.id === 'trend');
+      let trendsBlock = '';
+      if (hasTrendArchetype) {
+        try {
+          const currentTrends = await getActiveTrends(30);
+          if (currentTrends.length > 0) {
+            trendsBlock = `\nАКТУАЛЬНЫЕ ТРЕНДЫ (автообновление ${new Date().toLocaleDateString('ru-RU')}):\n` +
+              currentTrends.map(t => `- [${t.category}] ${t.trend}: ${t.description} (${t.relevance_score}/10)`).join('\n');
+          }
+        } catch {
+          // Если тренды не загрузились — генерируем без них
+        }
+      }
+
       await Promise.all(archetypesToProcess.map(async (arch) => {
         const archDef = ARCHETYPES.find(a => a.id === arch.id);
         const archLabel = archDef?.label ?? arch.label;
@@ -444,6 +462,47 @@ ${body.toneOfVoice && TONE_INSTRUCTIONS[body.toneOfVoice] ? TONE_INSTRUCTIONS[bo
 
         const priority: 'gold' | 'green' | 'yellow' | 'default' =
           arch.rank === 1 ? 'gold' : arch.rank === 2 ? 'green' : arch.rank === 3 ? 'yellow' : 'default';
+
+        const trendInstruction = arch.id === 'trend' ? `
+
+⚠️ КРИТИЧЕСКИ ВАЖНО — ПРОЧИТАЙ ВНИМАТЕЛЬНО:
+
+Ты НЕ должен писать что продукт сам по себе тренд.
+Ты НЕ должен писать бизнес-аналитику или статистику роста.
+Ты НЕ должен писать "это тренд", "это актуально", "это растёт".
+
+Ты ДОЛЖЕН:
+1. Взять КОНКРЕТНЫЙ тренд из списка ниже (фильм, мем, явление)
+2. Придумать НЕОЖИДАННУЮ метафору между этим трендом и продуктом клиента
+3. Написать заголовок который звучит как вирусный пост, а НЕ как реклама
+
+ФОРМУЛА: [Известный тренд/мем/фильм] → [неожиданная связь] → [продукт клиента]
+
+ПРИМЕРЫ ДЛЯ ПАДЕЛ-КЛУБА:
+✅ Тренд "Дюна" → "В пустыне выживает сильнейший. На корте — быстрейший" → hook: эпическая подача спорта
+✅ Тренд "дофаминовый детокс" → "Лучший детокс — не отключить телефон, а включить тело" → hook: антитеза
+✅ Тренд "AI заменит всех" → "AI заменит программистов, дизайнеров, юристов. Но не твою подачу" → hook: юмор + уникальность спорта
+✅ Тренд "Roman Empire" → "Мужчины думают о Римской империи. Умные мужчины думают о падел-корте" → hook: мем-формат
+✅ Тренд "Baldur's Gate" → "Прокачай ловкость в реальной жизни. Без кубиков, но с ракеткой" → hook: геймерский язык
+
+❌ ЗАПРЕЩЕНО:
+- "Падел — тренд №1" (это не привязка к тренду, это констатация)
+- "Самый быстрорастущий вид спорта" (это статистика, не креатив)
+- "Инвестируйте в падел" (это бизнес-предложение, не реклама)
+- Любой текст со словами "тренд", "растёт", "бизнес-модель", "инвестиции"
+
+ОБЯЗАТЕЛЬНО в idea:
+- Первое предложение: "Тренд: [название конкретного тренда из списка]"
+- Второе предложение: "Связка: [как этот тренд связан с продуктом]"
+- Третье предложение: "Формат: [как это выглядит — мем, пост, сториз]"
+
+headline: 3-5 слов в ЯЗЫКЕ ТРЕНДА (как будто это заголовок мема или вирусного поста)
+cta: 2-3 слова (тоже в языке тренда, не "купить" или "заказать")
+
+${trendsBlock}
+
+ВЫБЕРИ ОДИН ТРЕНД ИЗ СПИСКА ВЫШЕ И ИСПОЛЬЗУЙ ЕГО. НЕ ПРИДУМЫВАЙ СВОЙ.
+` : '';
 
         const hypoMsg = await client.messages.create({
           model: 'claude-opus-4-6',
@@ -458,7 +517,7 @@ ${body.toneOfVoice && TONE_INSTRUCTIONS[body.toneOfVoice] ? TONE_INSTRUCTIONS[bo
 
 Сгенерируй РОВНО 1 уникальную маркетинговую гипотезу для рекламного баннера.
 Гипотеза ОБЯЗАНА воплощать стиль и логику архетипа "${archLabel}".
-Выбери самый сильный и эффективный подход.
+Выбери самый сильный и эффективный подход.${trendInstruction}
 
 ${body.toneOfVoice && TONE_INSTRUCTIONS[body.toneOfVoice] ? TONE_INSTRUCTIONS[body.toneOfVoice] + ' Все тексты (headline, cta, hook) должны соответствовать этому тону.' : ''}
 
