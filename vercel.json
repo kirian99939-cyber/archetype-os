@@ -15,6 +15,15 @@
     },
     "app/api/cron/update-trends/route.ts": {
       "maxDuration": 120
+    },
+    "app/api/cron/poll-banners/route.ts": {
+      "maxDuration": 60
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/poll-banners",
+      "schedule": "*/2 * * * *"
+    }
+  ]
 }
