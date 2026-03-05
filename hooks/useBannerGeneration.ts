@@ -487,6 +487,7 @@ export function useBannerGeneration({
   const handleDownload = useCallback((banner: BannerItem) => {
     if (!banner.imageUrl) return;
     const a = document.createElement('a');
+    console.log('[download] banner:', banner.key, banner.width, banner.height, banner.imageUrl);
     const params = new URLSearchParams({ url: banner.imageUrl });
     if (banner.width) params.set('width', String(banner.width));
     if (banner.height) params.set('height', String(banner.height));
