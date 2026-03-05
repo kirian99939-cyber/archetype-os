@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     }
 
     const res = await fetch(
-      `https://api.nanobananaapi.ai/api/v1/nanobanana/record-info?taskId=${taskId}`,
+      `https://api.nanobananaapi.ai/api/v1/nanobanana/get-task-details?taskId=${taskId}`,
       {
         method: 'GET',
         headers: {
@@ -42,16 +42,7 @@ export async function GET(req: NextRequest) {
     const imageUrl = statusData.data?.response?.resultImageUrl || statusData.data?.result_urls?.[0];
     const isReady = !!imageUrl && statusData.data?.successFlag === 1;
 
-    return NextResponse.json({
-      ready: isReady,
-      imageUrl,
-      debug: {
-        successFlag: statusData.data?.successFlag,
-        response: statusData.data?.response,
-        result_urls: statusData.data?.result_urls,
-        keys: Object.keys(statusData.data || {}),
-      },
-    });
+    return NextResponse.json({ ready: isReady, imageUrl });
   } catch (error) {
     console.error('Banner status API error:', error);
     const message = error instanceof Error ? error.message : String(error);
