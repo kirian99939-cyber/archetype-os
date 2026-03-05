@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { supabaseAdmin } from '@/lib/supabase';
 
-export const dynamic = 'force-dynamic';
-
 const MILESTONES = [
   { count: 5, bonus: 300, label: '5 рефералов' },
   { count: 15, bonus: 1000, label: 'Амбассадор' },

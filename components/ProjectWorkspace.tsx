@@ -119,8 +119,28 @@ export default function ProjectWorkspace({ project: initialProject }: ProjectWor
   const [showArchetypePicker, setShowArchetypePicker] = useState(false);
   const [generating, setGenerating] = useState(false);
 
+  // Восстановить баннеры из проекта при первом рендере
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const initialBannerGroups = useMemo<BannerGroup[]>(() => {
+    if (!project.banners || project.banners.length === 0) return [];
+    return project.banners.map((g) => ({
+      hypothesisIndex: g.hypothesisIndex,
+      hypothesisTitle: g.hypothesisTitle,
+      banners: g.banners.map(b => ({
+        ...b,
+        loading: false,
+        taskId: b.taskId ?? null,
+        error: b.error ?? null,
+        width: b.width ?? BANNER_FORMATS.find(f => f.key === b.key)?.width ?? 1080,
+        height: b.height ?? BANNER_FORMATS.find(f => f.key === b.key)?.height ?? 1080,
+        refreshCount: b.refreshCount ?? 0,
+        previousVersions: b.previousVersions ?? [],
+      })),
+    }));
+  }, []); // только при маунте
+
   const {
-    bannerGroups, setBannerGroups,
+    bannerGroups,
     activeBannerTab, setActiveBannerTab,
     isSwitchingTab,
     anyBannerLoading,
@@ -139,28 +159,8 @@ export default function ProjectWorkspace({ project: initialProject }: ProjectWor
     selectedArchetypes: localArchetypes,
     analyzeResult: null,
     projectIdRef,
+    initialBannerGroups,
   });
-
-  // Восстановить баннеры из проекта при первом рендере
-  const initializedRef = useRef(false);
-  if (!initializedRef.current && project.banners && project.banners.length > 0 && bannerGroups.length === 0) {
-    initializedRef.current = true;
-    const restored: BannerGroup[] = project.banners.map((g) => ({
-      hypothesisIndex: g.hypothesisIndex,
-      hypothesisTitle: g.hypothesisTitle,
-      banners: g.banners.map(b => ({
-        ...b,
-        loading: false,
-        taskId: b.taskId ?? null,
-        error: b.error ?? null,
-        width: b.width ?? BANNER_FORMATS.find(f => f.key === b.key)?.width ?? 1080,
-        height: b.height ?? BANNER_FORMATS.find(f => f.key === b.key)?.height ?? 1080,
-        refreshCount: b.refreshCount ?? 0,
-        previousVersions: b.previousVersions ?? [],
-      })),
-    }));
-    setTimeout(() => setBannerGroups(restored), 0);
-  }
 
   const archDefs = localArchetypes
     .map(a => ARCHETYPES.find(d => d.id === a.id))
@@ -604,18 +604,16 @@ export default function ProjectWorkspace({ project: initialProject }: ProjectWor
                             <p className="text-white/55 text-xs italic">{h.hook}</p>
                           </div>
                         </div>
-                        <button
-                          onClick={() => handleGenerateBannersForHypothesis(i)}
-                          disabled={anyBannerLoading}
-                          className="w-full py-2 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-1.5"
-                          style={{
-                            background: hasBanners ? 'rgba(200,255,0,0.1)' : ACCENT,
-                            color: hasBanners ? ACCENT : '#0A0A0A',
-                            border: hasBanners ? '1px solid rgba(200,255,0,0.25)' : 'none',
-                          }}
-                        >
-                          {hasBanners ? '🔄 Сгенерировать ещё' : '🖼 Сгенерировать баннеры'}
-                        </button>
+                        {!hasBanners && (
+                          <button
+                            onClick={() => handleGenerateBannersForHypothesis(i)}
+                            disabled={anyBannerLoading}
+                            className="w-full py-2 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-1.5"
+                            style={{ background: ACCENT, color: '#0A0A0A' }}
+                          >
+                            🖼 Сгенерировать баннеры
+                          </button>
+                        )}
                       </div>
                     );
                   })}

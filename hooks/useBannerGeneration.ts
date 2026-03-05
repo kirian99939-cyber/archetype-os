@@ -17,6 +17,7 @@ interface UseBannerGenerationParams {
   analyzeResult: { primaryArchetype?: string } | null;
   projectIdRef: React.MutableRefObject<string | null>;
   onBusyChange?: (busy: boolean) => void;
+  initialBannerGroups?: BannerGroup[];
 }
 
 export interface UseBannerGenerationReturn {
@@ -41,6 +42,7 @@ export interface UseBannerGenerationReturn {
   handleRefreshBanner: (groupIndex: number, fmtKey: string) => Promise<void>;
   handleDownload: (banner: BannerItem) => void;
   switchTab: (gi: number) => void;
+  waitForBanner: (groupIndex: number, fmtKey: string, taskId: string) => Promise<void>;
 }
 
 export function useBannerGeneration({
@@ -52,8 +54,9 @@ export function useBannerGeneration({
   analyzeResult,
   projectIdRef,
   onBusyChange,
+  initialBannerGroups,
 }: UseBannerGenerationParams): UseBannerGenerationReturn {
-  const [bannerGroups, setBannerGroups]       = useState<BannerGroup[]>([]);
+  const [bannerGroups, setBannerGroups]       = useState<BannerGroup[]>(initialBannerGroups ?? []);
   const [activeBannerTab, setActiveBannerTab] = useState(0);
   const [isSwitchingTab, setIsSwitchingTab]   = useState(false);
   const [showNoCreditsModal, setShowNoCreditsModal] = useState(false);
@@ -86,7 +89,10 @@ export function useBannerGeneration({
           hypothesisTitle: g.hypothesisTitle,
           banners: g.banners.map(b => ({
             key: b.key, label: b.label, sublabel: b.sublabel,
-            imageUrl: b.imageUrl, error: b.error,
+            imageUrl: b.imageUrl ?? null,
+            taskId: b.taskId ?? null,
+            error: b.loading ? null : (b.error ?? null),
+            loading: b.loading,
           })),
         })),
       }),
@@ -644,5 +650,6 @@ export function useBannerGeneration({
     handleRefreshBanner,
     handleDownload,
     switchTab,
+    waitForBanner,
   };
 }

@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export const dynamic = 'force-dynamic';
-
 export async function GET(req: NextRequest) {
   try {
     if (!process.env.NANO_BANANA_API_KEY) {
@@ -39,13 +37,8 @@ export async function GET(req: NextRequest) {
     const statusData = await res.json();
     console.log('[NanoBanana] record-info full response:', JSON.stringify(statusData, null, 2));
 
-    const data = statusData.data;
-    const imageUrl = data?.response?.resultImageUrl
-      || data?.result_urls?.[0]
-      || data?.resultImageUrl
-      || data?.imageUrl
-      || null;
-    const isReady = !!imageUrl;
+    const imageUrl = statusData.data?.response?.resultImageUrl || statusData.data?.result_urls?.[0];
+    const isReady = !!imageUrl && statusData.data?.successFlag === 1;
 
     return NextResponse.json({ ready: isReady, imageUrl });
   } catch (error) {
