@@ -377,19 +377,44 @@ export function useBannerGeneration({
       } else if (creditsRes.status === 401) { return; }
     } catch {}
 
-    const newGroup: BannerGroup = {
-      hypothesisIndex: hypothesisIdx,
-      hypothesisTitle: hypothesis.idea,
-      banners: activeFormats.map(f => ({
-        ...f, taskId: null, imageUrl: null, loading: true, error: null,
-        refreshCount: 0, previousVersions: [],
-      })),
-    };
-
     bannersSavedRef.current = false;
-    const newGroupIndex = bannerGroups.length;
-    setBannerGroups(prev => [...prev, newGroup]);
-    setActiveBannerTab(newGroupIndex);
+    let targetGroupIndex = 0;
+
+    setBannerGroups(prev => {
+      const existingIndex = prev.findIndex(g => g.hypothesisIndex === hypothesisIdx);
+      if (existingIndex !== -1) {
+        // Добавляем новые форматы в существующую группу
+        targetGroupIndex = existingIndex;
+        const existingKeys = new Set(prev[existingIndex].banners.map(b => b.key));
+        const newBanners = activeFormats
+          .filter(f => !existingKeys.has(f.key))
+          .map(f => ({ ...f, taskId: null, imageUrl: null, loading: true, error: null, refreshCount: 0, previousVersions: [] }));
+        const regenBanners = activeFormats
+          .filter(f => existingKeys.has(f.key))
+          .map(f => ({ ...f, taskId: null, imageUrl: null, loading: true, error: null, refreshCount: 0, previousVersions: [] }));
+        return prev.map((g, gi) => gi !== existingIndex ? g : {
+          ...g,
+          banners: [
+            ...g.banners.map(b => {
+              const regen = regenBanners.find(r => r.key === b.key);
+              return regen ? { ...b, loading: true, error: null, taskId: null, imageUrl: null } : b;
+            }),
+            ...newBanners,
+          ],
+        });
+      } else {
+        // Создаём новую группу
+        targetGroupIndex = prev.length;
+        return [...prev, {
+          hypothesisIndex: hypothesisIdx,
+          hypothesisTitle: hypothesis.idea,
+          banners: activeFormats.map(f => ({ ...f, taskId: null, imageUrl: null, loading: true, error: null, refreshCount: 0, previousVersions: [] })),
+        }];
+      }
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    setActiveBannerTab(targetGroupIndex);
 
     const archetype = (hypothesis.archetypeId || selectedArchetypes[0]?.id || analyzeResult?.primaryArchetype || '').toLowerCase();
     const basePrompt = [
@@ -431,7 +456,7 @@ export function useBannerGeneration({
           setShowNoCreditsModal(true);
           setBannerGroups(prev =>
             prev.map((g, gi) =>
-              gi !== newGroupIndex ? g : {
+              gi !== targetGroupIndex ? g : {
                 ...g,
                 banners: g.banners.map(b =>
                   b.key === fmt.key ? { ...b, loading: false, error: 'Недостаточно кредитов' } : b
@@ -453,7 +478,7 @@ export function useBannerGeneration({
 
         setBannerGroups(prev =>
           prev.map((g, gi) =>
-            gi !== newGroupIndex ? g : {
+            gi !== targetGroupIndex ? g : {
               ...g,
               banners: g.banners.map(b =>
                 b.key === fmt.key ? { ...b, taskId } : b
@@ -462,7 +487,7 @@ export function useBannerGeneration({
           )
         );
 
-        await waitForBanner(newGroupIndex, fmt.key, taskId);
+        await waitForBanner(targetGroupIndex, fmt.key, taskId);
 
         if (fmtIndex < activeFormats.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 2000));
@@ -471,7 +496,7 @@ export function useBannerGeneration({
         const errMsg = err instanceof Error ? err.message : 'Генерация не удалась. Кредиты не списаны — попробуйте ещё раз.';
         setBannerGroups(prev =>
           prev.map((g, gi) =>
-            gi !== newGroupIndex ? g : {
+            gi !== targetGroupIndex ? g : {
               ...g,
               banners: g.banners.map(b =>
                 b.key === fmt.key ? { ...b, loading: false, error: errMsg } : b
