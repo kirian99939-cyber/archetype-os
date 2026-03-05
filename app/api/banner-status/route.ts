@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     }
 
     const res = await fetch(
-      `https://api.nanobananaapi.ai/api/v1/nanobanana/get-task-details?taskId=${taskId}`,
+      `https://api.nanobananaapi.ai/api/v1/nanobanana/record-info?taskId=${taskId}`,
       {
         method: 'GET',
         headers: {
@@ -39,8 +39,13 @@ export async function GET(req: NextRequest) {
     const statusData = await res.json();
     console.log('[NanoBanana] record-info full response:', JSON.stringify(statusData, null, 2));
 
-    const imageUrl = statusData.data?.response?.resultImageUrl || statusData.data?.result_urls?.[0];
-    const isReady = !!imageUrl && statusData.data?.successFlag === 1;
+    const data = statusData.data;
+    const imageUrl = data?.response?.resultImageUrl
+      || data?.result_urls?.[0]
+      || data?.resultImageUrl
+      || data?.imageUrl
+      || null;
+    const isReady = !!imageUrl;
 
     return NextResponse.json({ ready: isReady, imageUrl });
   } catch (error) {
