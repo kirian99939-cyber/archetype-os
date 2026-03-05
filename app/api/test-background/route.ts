@@ -41,7 +41,8 @@ export async function POST(req: NextRequest) {
 // GET — получить последние задачи пользователя
 export async function GET(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-  const { data } = await supabase
+
+  const { data: tasks } = await supabase
     .from('banner_tasks')
     .select('*')
     .eq('user_id', token?.sub || '')
@@ -49,5 +50,38 @@ export async function GET(req: NextRequest) {
     .order('created_at', { ascending: false })
     .limit(5);
 
-  return NextResponse.json({ tasks: data ?? [] });
+  if (!tasks) return NextResponse.json({ tasks: [] });
+
+  // Для pending задач — проверяем NanoBanana напрямую
+  const updatedTasks = await Promise.all(tasks.map(async (task) => {
+    if (task.status !== 'pending') return task;
+
+    try {
+      const res = await fetch(
+        `https://api.nanobananaapi.ai/api/v1/nanobanana/record-info?taskId=${task.task_id}`,
+        { headers: { Authorization: `Bearer ${process.env.NANO_BANANA_API_KEY}` } }
+      );
+      const data = await res.json();
+      const imageUrl = data.data?.response?.resultImageUrl;
+      const successFlag = data.data?.successFlag;
+
+      if (successFlag === 1 && imageUrl) {
+        await supabase
+          .from('banner_tasks')
+          .update({ status: 'done', image_url: imageUrl, updated_at: new Date().toISOString() })
+          .eq('task_id', task.task_id);
+        return { ...task, status: 'done', image_url: imageUrl };
+      } else if (successFlag === 2 || successFlag === 3) {
+        await supabase
+          .from('banner_tasks')
+          .update({ status: 'failed', updated_at: new Date().toISOString() })
+          .eq('task_id', task.task_id);
+        return { ...task, status: 'failed' };
+      }
+    } catch {}
+
+    return task;
+  }));
+
+  return NextResponse.json({ tasks: updatedTasks });
 }
