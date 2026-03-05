@@ -604,16 +604,18 @@ export default function ProjectWorkspace({ project: initialProject }: ProjectWor
                             <p className="text-white/55 text-xs italic">{h.hook}</p>
                           </div>
                         </div>
-                        {!hasBanners && (
-                          <button
-                            onClick={() => handleGenerateBannersForHypothesis(i)}
-                            disabled={anyBannerLoading}
-                            className="w-full py-2 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-1.5"
-                            style={{ background: ACCENT, color: '#0A0A0A' }}
-                          >
-                            🖼 Сгенерировать баннеры
-                          </button>
-                        )}
+                        <button
+                          onClick={() => handleGenerateBannersForHypothesis(i)}
+                          disabled={anyBannerLoading}
+                          className="w-full py-2 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-1.5"
+                          style={{
+                            background: hasBanners ? 'rgba(200,255,0,0.1)' : ACCENT,
+                            color: hasBanners ? ACCENT : '#0A0A0A',
+                            border: hasBanners ? '1px solid rgba(200,255,0,0.25)' : 'none',
+                          }}
+                        >
+                          {hasBanners ? '🔄 Сгенерировать ещё' : '🖼 Сгенерировать баннеры'}
+                        </button>
                       </div>
                     );
                   })}
