@@ -30,6 +30,7 @@ export interface BannerItem {
   error:    string | null;
   refreshCount:     number;
   previousVersions: string[];
+  versions?: BannerItem[];
 }
 
 export interface BannerGroup {
