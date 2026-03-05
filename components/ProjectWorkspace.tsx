@@ -114,6 +114,8 @@ export default function ProjectWorkspace({ project: initialProject }: ProjectWor
     });
   };
 
+  const [pendingHypIndex, setPendingHypIndex] = useState<number | null>(null);
+  const [showFormatPicker, setShowFormatPicker] = useState(false);
   const [showArchetypePicker, setShowArchetypePicker] = useState(false);
   const [generating, setGenerating] = useState(false);
 
@@ -246,12 +248,20 @@ export default function ProjectWorkspace({ project: initialProject }: ProjectWor
   }, [localArchetypes, project.id, handleAddHypothesis]);
 
   // ── handleGenerateBannersForHypothesis ──
-  const handleGenerateBannersForHypothesis = useCallback(async (hypIndex: number) => {
-    const hyp = localHypotheses[hypIndex];
+  const handleGenerateBannersForHypothesis = useCallback((hypIndex: number) => {
+    setPendingHypIndex(hypIndex);
+    setShowFormatPicker(true);
+  }, []);
+
+  const handleConfirmGenerate = useCallback(async () => {
+    if (pendingHypIndex === null) return;
+    const hyp = localHypotheses[pendingHypIndex];
     if (!hyp) return;
+    setShowFormatPicker(false);
     setActiveTab('banners');
-    await generateForSingleHypothesis(hypIndex, hyp);
-  }, [localHypotheses, generateForSingleHypothesis]);
+    await generateForSingleHypothesis(pendingHypIndex, hyp);
+    setPendingHypIndex(null);
+  }, [pendingHypIndex, localHypotheses, generateForSingleHypothesis]);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -886,6 +896,65 @@ export default function ProjectWorkspace({ project: initialProject }: ProjectWor
                   </button>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════ MODAL: FORMAT PICKER ═══════════ */}
+      {showFormatPicker && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
+          onClick={() => setShowFormatPicker(false)}
+        >
+          <div
+            className="glass-card p-6 max-w-lg w-full"
+            style={{ border: `1px solid ${ACCENT_BORDER}` }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-white font-bold text-lg">Выберите форматы</h3>
+              <button onClick={() => setShowFormatPicker(false)} className="text-white/40 hover:text-white/60 text-xl">✕</button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mb-6">
+              {BANNER_FORMATS.map(f => {
+                const active = selectedFormats.has(f.key);
+                return (
+                  <button
+                    key={f.key}
+                    onClick={() => toggleFormat(f.key)}
+                    className="p-3 rounded-xl text-left transition-all"
+                    style={{
+                      background: active ? ACCENT_BG : 'rgba(255,255,255,0.04)',
+                      border: `1px solid ${active ? ACCENT : 'rgba(255,255,255,0.1)'}`,
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-white text-sm font-medium">{f.label}</span>
+                      {active && <span style={{ color: ACCENT }}>✓</span>}
+                    </div>
+                    <span className="text-white/35 text-xs">{f.sublabel}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowFormatPicker(false)}
+                className="flex-1 btn-secondary"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleConfirmGenerate}
+                disabled={selectedFormats.size === 0}
+                className="flex-1 btn-primary"
+              >
+                ⚡ Генерировать ({selectedFormats.size})
+              </button>
             </div>
           </div>
         </div>
