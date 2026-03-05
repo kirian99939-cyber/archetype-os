@@ -387,8 +387,11 @@ export function useBannerGeneration({
     };
 
     bannersSavedRef.current = false;
-    const newGroupIndex = bannerGroups.length;
-    setBannerGroups(prev => [...prev, newGroup]);
+    let newGroupIndex = 0;
+    setBannerGroups(prev => {
+      newGroupIndex = prev.length;
+      return [...prev, newGroup];
+    });
     setActiveBannerTab(newGroupIndex);
 
     const archetype = (hypothesis.archetypeId || selectedArchetypes[0]?.id || analyzeResult?.primaryArchetype || '').toLowerCase();
