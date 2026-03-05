@@ -97,13 +97,48 @@ export default function ProjectWorkspace({ project: initialProject }: ProjectWor
   );
 
   const allHypothesesSet = new Set(localHypotheses.map((_, i) => i));
-  const selectedFormats = new Set(BANNER_FORMATS.map(f => f.key));
+  const [selectedFormats, setSelectedFormats] = useState<Set<string>>(
+    new Set(BANNER_FORMATS.map(f => f.key))
+  );
+
+  const toggleFormat = (key: string) => {
+    setSelectedFormats(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        if (next.size <= 1) return prev;
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
 
   const [showArchetypePicker, setShowArchetypePicker] = useState(false);
   const [generating, setGenerating] = useState(false);
 
+  // Восстановить баннеры из проекта при первом рендере
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const initialBannerGroups = useMemo<BannerGroup[]>(() => {
+    if (!project.banners || project.banners.length === 0) return [];
+    return project.banners.map((g) => ({
+      hypothesisIndex: g.hypothesisIndex,
+      hypothesisTitle: g.hypothesisTitle,
+      banners: g.banners.map(b => ({
+        ...b,
+        loading: false,
+        taskId: b.taskId ?? null,
+        error: b.error ?? null,
+        width: b.width ?? BANNER_FORMATS.find(f => f.key === b.key)?.width ?? 1080,
+        height: b.height ?? BANNER_FORMATS.find(f => f.key === b.key)?.height ?? 1080,
+        refreshCount: b.refreshCount ?? 0,
+        previousVersions: b.previousVersions ?? [],
+      })),
+    }));
+  }, []); // только при маунте
+
   const {
-    bannerGroups, setBannerGroups,
+    bannerGroups,
     activeBannerTab, setActiveBannerTab,
     isSwitchingTab,
     anyBannerLoading,
@@ -122,28 +157,8 @@ export default function ProjectWorkspace({ project: initialProject }: ProjectWor
     selectedArchetypes: localArchetypes,
     analyzeResult: null,
     projectIdRef,
+    initialBannerGroups,
   });
-
-  // Восстановить баннеры из проекта при первом рендере
-  const initializedRef = useRef(false);
-  if (!initializedRef.current && project.banners && project.banners.length > 0 && bannerGroups.length === 0) {
-    initializedRef.current = true;
-    const restored: BannerGroup[] = project.banners.map((g) => ({
-      hypothesisIndex: g.hypothesisIndex,
-      hypothesisTitle: g.hypothesisTitle,
-      banners: g.banners.map(b => ({
-        ...b,
-        loading: false,
-        taskId: b.taskId ?? null,
-        error: b.error ?? null,
-        width: b.width ?? BANNER_FORMATS.find(f => f.key === b.key)?.width ?? 1080,
-        height: b.height ?? BANNER_FORMATS.find(f => f.key === b.key)?.height ?? 1080,
-        refreshCount: b.refreshCount ?? 0,
-        previousVersions: b.previousVersions ?? [],
-      })),
-    }));
-    setTimeout(() => setBannerGroups(restored), 0);
-  }
 
   const archDefs = localArchetypes
     .map(a => ARCHETYPES.find(d => d.id === a.id))
@@ -784,6 +799,30 @@ export default function ProjectWorkspace({ project: initialProject }: ProjectWor
               <p className="text-white/40 text-sm">Баннеры не найдены</p>
             </div>
           )}
+
+          {/* Выбор форматов */}
+          <div className="glass-card p-4 space-y-3">
+            <p className="text-white/40 text-xs uppercase tracking-widest">Форматы для генерации</p>
+            <div className="flex flex-wrap gap-2">
+              {BANNER_FORMATS.map(f => {
+                const active = selectedFormats.has(f.key);
+                return (
+                  <button
+                    key={f.key}
+                    onClick={() => toggleFormat(f.key)}
+                    className="px-3 py-1.5 rounded-xl text-xs font-medium transition-all"
+                    style={{
+                      background: active ? ACCENT_BG : 'rgba(255,255,255,0.05)',
+                      border: `1px solid ${active ? ACCENT : 'rgba(255,255,255,0.1)'}`,
+                      color: active ? ACCENT : 'rgba(255,255,255,0.4)',
+                    }}
+                  >
+                    {f.label} <span className="opacity-50">{f.sublabel}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           {/* Кнопка генерации ещё */}
           {bannerGroups.length > 0 && !anyBannerLoading && (

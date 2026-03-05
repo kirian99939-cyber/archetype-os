@@ -17,6 +17,7 @@ interface UseBannerGenerationParams {
   analyzeResult: { primaryArchetype?: string } | null;
   projectIdRef: React.MutableRefObject<string | null>;
   onBusyChange?: (busy: boolean) => void;
+  initialBannerGroups?: BannerGroup[];
 }
 
 export interface UseBannerGenerationReturn {
@@ -53,8 +54,9 @@ export function useBannerGeneration({
   analyzeResult,
   projectIdRef,
   onBusyChange,
+  initialBannerGroups,
 }: UseBannerGenerationParams): UseBannerGenerationReturn {
-  const [bannerGroups, setBannerGroups]       = useState<BannerGroup[]>([]);
+  const [bannerGroups, setBannerGroups]       = useState<BannerGroup[]>(initialBannerGroups ?? []);
   const [activeBannerTab, setActiveBannerTab] = useState(0);
   const [isSwitchingTab, setIsSwitchingTab]   = useState(false);
   const [showNoCreditsModal, setShowNoCreditsModal] = useState(false);
