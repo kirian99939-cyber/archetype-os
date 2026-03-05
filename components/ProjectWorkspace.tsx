@@ -840,7 +840,12 @@ export default function ProjectWorkspace({ project: initialProject }: ProjectWor
           {bannerGroups.length > 0 && !anyBannerLoading && (
             <div className="flex gap-3">
               <button
-                onClick={handleGenerateBanners}
+                onClick={() => {
+                  if (activeBannerGroup) {
+                    const hyp = localHypotheses[activeBannerGroup.hypothesisIndex];
+                    if (hyp) generateForSingleHypothesis(activeBannerGroup.hypothesisIndex, hyp);
+                  }
+                }}
                 className="btn-primary flex items-center gap-2"
               >
                 ⚡ Сгенерировать ещё
