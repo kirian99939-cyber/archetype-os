@@ -142,7 +142,6 @@ export default function NewProject({ onBusyChange, initialProject }: NewProjectP
     handleRefreshBanner,
     handleDownload,
     switchTab,
-    waitForBanner,
   } = useBannerGeneration({
     brief,
     hypotheses,
@@ -334,11 +333,6 @@ export default function NewProject({ onBusyChange, initialProject }: NewProjectP
           })));
 
           bannersSavedRef.current = false;
-
-          // Возобновляем поллинг для каждого
-          toResume.forEach(({ groupIndex, fmtKey, taskId }) => {
-            waitForBanner(groupIndex, fmtKey, taskId);
-          });
         }
       }
 
