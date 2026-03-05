@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
     console.log('[NanoBanana] record-info full response:', JSON.stringify(statusData, null, 2));
 
     const imageUrl = statusData.data?.response?.resultImageUrl || statusData.data?.result_urls?.[0];
-    const isReady = !!imageUrl;
+    const isReady = !!imageUrl && statusData.data?.successFlag === 1;
 
     return NextResponse.json({ ready: isReady, imageUrl });
   } catch (error) {
