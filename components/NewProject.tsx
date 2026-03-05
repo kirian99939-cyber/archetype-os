@@ -311,29 +311,6 @@ export default function NewProject({ onBusyChange, initialProject }: NewProjectP
           banners: g.banners.map(b => ({ ...b, loading: false, error: b.error ?? null, refreshCount: b.refreshCount ?? 0, previousVersions: b.previousVersions ?? [] })),
         }));
         setBannerGroups(restored);
-
-        // Возобновляем поллинг для баннеров с taskId но без imageUrl
-        const toResume: { groupIndex: number; fmtKey: string; taskId: string }[] = [];
-        restored.forEach((group, gi) => {
-          group.banners.forEach(b => {
-            if (b.taskId && !b.imageUrl && !b.error) {
-              toResume.push({ groupIndex: gi, fmtKey: b.key, taskId: b.taskId });
-            }
-          });
-        });
-
-        if (toResume.length > 0) {
-          // Помечаем как loading снова
-          setBannerGroups(prev => prev.map((g, gi) => ({
-            ...g,
-            banners: g.banners.map(b => {
-              const resume = toResume.find(r => r.groupIndex === gi && r.fmtKey === b.key);
-              return resume ? { ...b, loading: true, error: null } : b;
-            }),
-          })));
-
-          bannersSavedRef.current = false;
-        }
       }
 
       if (Array.isArray(project.banner_history) && project.banner_history.length > 0) {
