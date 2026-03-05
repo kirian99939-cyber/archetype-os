@@ -299,7 +299,7 @@ export async function POST(req: NextRequest) {
 
     const nanoBananaPayload: Record<string, unknown> = {
       prompt: imagePrompt,
-      resolution: '2K',
+      resolution: (body.width && body.height && body.width > body.height && body.width >= 1920) ? '1K' : '2K',
       aspectRatio,
     };
     if (activeImageUrls && activeImageUrls.length > 0) {
