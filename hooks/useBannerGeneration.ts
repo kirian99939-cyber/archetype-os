@@ -487,8 +487,11 @@ export function useBannerGeneration({
   const handleDownload = useCallback((banner: BannerItem) => {
     if (!banner.imageUrl) return;
     const a = document.createElement('a');
-    a.href = `/api/download-image?url=${encodeURIComponent(banner.imageUrl)}`;
-    a.download = `banner-${banner.key}-${Date.now()}.png`;
+    const params = new URLSearchParams({ url: banner.imageUrl });
+    if (banner.width) params.set('width', String(banner.width));
+    if (banner.height) params.set('height', String(banner.height));
+    a.href = `/api/download-image?${params.toString()}`;
+    a.download = `banner-${banner.key}-${banner.width}x${banner.height}-${Date.now()}.png`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
