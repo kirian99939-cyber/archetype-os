@@ -38,7 +38,6 @@ const NAV_ITEMS: { id: Page; label: string; icon: string }[] = [
   { id: 'history',     label: 'История генераций',  icon: '◷' },
   { id: 'analytics',   label: 'Аналитика',          icon: '↗' },
   { id: 'banner-library' as Page, label: 'Все баннеры', icon: '📚' },
-  { id: 'brands' as Page, label: 'Бренды', icon: '◉' },
   { id: 'referrals' as Page, label: 'Рефералы', icon: '🎁' },
   { id: 'pricing' as Page, label: 'Тарифы', icon: '⚡' },
   { id: 'settings',    label: 'Настройки',          icon: '⚙' },
@@ -59,7 +58,10 @@ export default function DashboardRoute() {
 
   const navItems = [
     ...NAV_ITEMS,
-    ...(isAdmin ? [{ id: 'admin' as Page, label: 'Админ', icon: '⚙️' }] : []),
+    ...(isAdmin ? [
+      { id: 'brands' as Page, label: 'Бренды', icon: '◉' },
+      { id: 'admin' as Page, label: 'Админ', icon: '⚙️' },
+    ] : []),
   ];
 
   useEffect(() => {
@@ -233,7 +235,7 @@ export default function DashboardRoute() {
           {activePage === 'archetypes'  && <ArchetypesPage />}
           {activePage === 'analytics'   && <AnalyticsPage />}
           {activePage === 'banner-library' && <BannerLibraryPage />}
-          {activePage === 'brands' && <BrandsPage />}
+          {activePage === 'brands' && isAdmin && <BrandsPage />}
           {activePage === 'referrals' && (
             <>
               <GoldenPage />
