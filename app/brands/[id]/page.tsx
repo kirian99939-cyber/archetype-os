@@ -36,6 +36,8 @@ export default function BrandDetailPage() {
   const [form, setForm] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
 
   useEffect(() => {
     fetch('/api/brands')
@@ -56,6 +58,18 @@ export default function BrandDetailPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+  }, [brandId]);
+
+  useEffect(() => {
+    setProjectsLoading(true);
+    fetch('/api/projects')
+      .then((r) => r.json())
+      .then((data) => {
+        const all = Array.isArray(data) ? data : data.projects ?? [];
+        setProjects(all.filter((p: any) => p.brand_id === brandId));
+      })
+      .catch(() => {})
+      .finally(() => setProjectsLoading(false));
   }, [brandId]);
 
   async function handleSave() {
@@ -161,11 +175,57 @@ export default function BrandDetailPage() {
         )}
 
         {activeTab === 'projects' && (
-          <div
-            className="rounded-xl border p-8 text-center"
-            style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
-          >
-            <p className="text-white/30 text-sm">Раздел в разработке</p>
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-white/40 text-sm">Проекты бренда</p>
+              <button
+                onClick={() => router.push(`/project/new?brand_id=${brandId}`)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 hover:scale-[1.02]"
+                style={{ background: ACCENT, color: '#0A0A0A' }}
+              >
+                <span>+</span>
+                <span>Новый проект</span>
+              </button>
+            </div>
+
+            {projectsLoading ? (
+              <p className="text-white/40 text-sm py-8 text-center">Загрузка...</p>
+            ) : projects.length === 0 ? (
+              <div
+                className="rounded-xl border border-dashed p-12 text-center"
+                style={{ borderColor: 'rgba(200,255,0,0.2)' }}
+              >
+                <p className="text-white/30 text-lg mb-2">Нет проектов</p>
+                <p className="text-white/20 text-sm">Создайте первый проект для этого бренда</p>
+              </div>
+            ) : (
+              <div className="grid gap-3">
+                {projects.map((project: any) => (
+                  <div
+                    key={project.id}
+                    onClick={() => router.push(`/project/${project.id}`)}
+                    className="rounded-xl border p-4 flex items-center justify-between cursor-pointer transition-all duration-150 hover:border-white/20"
+                    style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
+                  >
+                    <div>
+                      <h4 className="text-white font-medium text-sm">{project.title || 'Без названия'}</h4>
+                      <p className="text-white/30 text-xs mt-0.5">
+                        {new Date(project.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </p>
+                    </div>
+                    <span
+                      className="text-[10px] font-medium px-2 py-1 rounded-full"
+                      style={{
+                        background: project.status === 'completed' ? 'rgba(100,220,150,0.1)' : 'rgba(200,255,0,0.1)',
+                        color: project.status === 'completed' ? 'rgba(100,220,150,0.9)' : ACCENT,
+                      }}
+                    >
+                      {project.status === 'completed' ? 'Готов' : project.status === 'draft' ? 'Черновик' : 'В работе'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

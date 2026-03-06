@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import DashboardShell from '@/components/DashboardShell';
@@ -18,7 +18,9 @@ export default function NewProjectPage() {
 
   return (
     <DashboardShell activePage="new-project" title="Новый проект">
-      <NewProject />
+      <Suspense fallback={<p className="text-white/40 text-sm">Загрузка...</p>}>
+        <NewProject />
+      </Suspense>
     </DashboardShell>
   );
 }

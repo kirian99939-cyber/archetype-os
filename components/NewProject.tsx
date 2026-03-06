@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import type { AnalyzeResponse, NewHypothesis, RecommendV2Response, HybridArchetype } from '@/app/api/analyze/route';
 import { ARCHETYPES } from '@/lib/archetypes';
 import { BANNER_FORMATS, AD_PLATFORMS } from '@/lib/project-types';
@@ -65,6 +65,8 @@ interface NewProjectProps {
 export default function NewProject({ onBusyChange, initialProject }: NewProjectProps) {
   const { data: session } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const brandId = searchParams.get('brand_id');
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
   const [brief, setBrief] = useState<Brief>({
@@ -1054,7 +1056,7 @@ export default function NewProject({ onBusyChange, initialProject }: NewProjectP
                     try {
                       const res = await fetch('/api/projects', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ title, brief: brief as unknown as Record<string, unknown>, status: 'brief' }),
+                        body: JSON.stringify({ title, brief: brief as unknown as Record<string, unknown>, status: 'brief', ...(brandId ? { brand_id: brandId } : {}) }),
                       });
                       const json = await res.json();
                       if (res.ok) {

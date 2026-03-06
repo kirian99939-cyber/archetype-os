@@ -105,6 +105,7 @@ export interface ProjectPayload {
   banners?:          unknown[];
   selected_formats?: string[];
   status?:           string;
+  brand_id?:         string;
 }
 
 /**
@@ -147,7 +148,7 @@ export async function saveProject(
 export async function getProjects(userId: string) {
   const { data, error } = await supabaseAdmin
     .from('projects')
-    .select('id, title, status, created_at, updated_at, archetype, archetypes, banners, banner_history')
+    .select('id, title, status, created_at, updated_at, archetype, archetypes, banners, banner_history, brand_id')
     .eq('user_id', userId)
     .order('updated_at', { ascending: false });
 
