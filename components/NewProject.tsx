@@ -74,6 +74,27 @@ export default function NewProject({ onBusyChange, initialProject }: NewProjectP
     visualMode: 'ai', imageUrls: [], imageLink: '',
   });
 
+  // Auto-fill brief from brand data
+  useEffect(() => {
+    if (!brandId) return;
+    fetch(`/api/brands`)
+      .then((r) => r.json())
+      .then((data) => {
+        const brand = (data.brands ?? []).find((b: any) => b.id === brandId);
+        if (brand) {
+          const validTones = TONE_OF_VOICE.map(t => t.id);
+          setBrief((prev) => ({
+            ...prev,
+            audience: brand.audience || prev.audience,
+            utp: brand.utp || prev.utp,
+            toneOfVoice: validTones.includes(brand.tone_of_voice) ? brand.tone_of_voice : prev.toneOfVoice,
+            context: brand.context || prev.context,
+          }));
+        }
+      })
+      .catch(() => {});
+  }, [brandId]);
+
   const [offerLoading, setOfferLoading]         = useState(false);
   const [offerSuggestions, setOfferSuggestions] = useState<string[]>([]);
 
