@@ -116,7 +116,7 @@ export default function DashboardRoute() {
         className="flex flex-col border-r border-white/10 shrink-0"
         style={{ width: 'var(--sidebar-width)' }}
       >
-        <div className="px-4 py-5 border-b border-white/10">
+        <div className="h-14 flex items-center px-4 border-b border-white/10">
           <Image src="/logo.svg" alt="Креатика" height={28} width={114} priority />
         </div>
 
