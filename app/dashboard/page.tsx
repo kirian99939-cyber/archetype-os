@@ -4,43 +4,45 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import ArchetypesPage from '@/components/ArchetypesPage';
-import SettingsPage from '@/components/SettingsPage';
-import AnalyticsPage from '@/components/AnalyticsPage';
 import DashboardPage from '@/components/DashboardPage';
-import HistoryPage from '@/components/HistoryPage';
 import PricingSection from '@/components/PricingSection';
-import BannerLibraryPage from '@/components/BannerLibraryPage';
 import AdminPage from '@/components/AdminPage';
 import ReferralDashboard from '@/components/ReferralDashboard';
 import GoldenPage from '@/components/GoldenPage';
 import BrandsPage from '@/components/BrandsPage';
+import ToolsPage from '@/components/ToolsPage';
+import SettingsPage from '@/components/SettingsPage';
 import AnimatedLogo from '@/components/AnimatedLogo';
 import ChangelogModal, { hasUnseenChangelog } from '@/components/ChangelogModal';
 
 type Page =
   | 'dashboard'
   | 'new-project'
-  | 'archetypes'
-  | 'history'
-  | 'analytics'
-  | 'banner-library'
   | 'brands'
+  | 'tools'
   | 'referrals'
   | 'pricing'
   | 'settings'
   | 'admin';
 
-const NAV_ITEMS: { id: Page; label: string; icon: string }[] = [
-  { id: 'dashboard',   label: 'Панель управления', icon: '▦' },
-  { id: 'new-project', label: 'Новый проект',       icon: '+' },
-  { id: 'archetypes',  label: 'Архетипы',           icon: '◈' },
-  { id: 'history',     label: 'История генераций',  icon: '◷' },
-  { id: 'analytics',   label: 'Аналитика',          icon: '↗' },
-  { id: 'banner-library' as Page, label: 'Все баннеры', icon: '📚' },
-  { id: 'referrals' as Page, label: 'Рефералы', icon: '🎁' },
-  { id: 'pricing' as Page, label: 'Тарифы', icon: '⚡' },
-  { id: 'settings',    label: 'Настройки',          icon: '⚙' },
+interface NavItem {
+  id: Page;
+  label: string;
+  icon: string;
+  adminOnly?: boolean;
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { id: 'dashboard', label: 'Главная', icon: '🏠' },
+  { id: 'brands', label: 'Бренды', icon: '📁' },
+  { id: 'tools', label: 'Инструменты', icon: '🔧' },
+];
+
+const NAV_BOTTOM: NavItem[] = [
+  { id: 'referrals', label: 'Рефералы', icon: '🎁' },
+  { id: 'pricing', label: 'Тарифы', icon: '⚡' },
+  { id: 'settings', label: 'Настройки', icon: '⚙️' },
+  { id: 'admin', label: 'Админ', icon: '👑', adminOnly: true },
 ];
 
 const ADMIN_EMAILS = ['kirian99939@gmail.com'];
@@ -56,13 +58,9 @@ export default function DashboardRoute() {
   const [referralCount, setReferralCount] = useState(0);
   const isAdmin = ADMIN_EMAILS.includes(session?.user?.email || '');
 
-  const navItems = [
-    ...NAV_ITEMS,
-    ...(isAdmin ? [
-      { id: 'brands' as Page, label: 'Бренды', icon: '◉' },
-      { id: 'admin' as Page, label: 'Админ', icon: '⚙️' },
-    ] : []),
-  ];
+  const navTop = NAV_ITEMS.filter(item => !item.adminOnly || isAdmin);
+  const navBottom = NAV_BOTTOM.filter(item => !item.adminOnly || isAdmin);
+  const allNavItems = [...navTop, ...navBottom];
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -129,38 +127,68 @@ export default function DashboardRoute() {
           </p>
         </div>
 
-        <nav className="flex-1 px-2 py-3 flex flex-col gap-0.5">
-          {navItems.map((item) => {
-            const isActive = activePage === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => handleNavigate(item.id)}
-                className="w-full text-left flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150"
-                style={{
-                  background: isActive ? 'rgba(200,255,0,0.1)' : 'transparent',
-                  color: isActive ? 'var(--accent)' : 'rgba(255,255,255,0.5)',
-                }}
-                onMouseEnter={(e) => {
-                  if (!isActive) (e.currentTarget as HTMLButtonElement).style.color = '#fff';
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive) (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.5)';
-                }}
-              >
-                <span className="w-4 text-center shrink-0">{item.icon}</span>
-                <span className="leading-tight">{item.label}</span>
-                {item.id === 'referrals' && referralCount > 0 && (
-                  <span
-                    className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none"
-                    style={{ background: ACCENT, color: '#0A0A0A' }}
-                  >
-                    {referralCount}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        <nav className="flex-1 px-2 py-3 flex flex-col justify-between">
+          {/* Top nav */}
+          <div className="flex flex-col gap-0.5">
+            {navTop.map((item) => {
+              const isActive = activePage === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => handleNavigate(item.id)}
+                  className="w-full text-left flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150"
+                  style={{
+                    background: isActive ? 'rgba(200,255,0,0.1)' : 'transparent',
+                    color: isActive ? 'var(--accent)' : 'rgba(255,255,255,0.5)',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) (e.currentTarget as HTMLButtonElement).style.color = '#fff';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.5)';
+                  }}
+                >
+                  <span className="w-4 text-center shrink-0">{item.icon}</span>
+                  <span className="leading-tight">{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Bottom nav */}
+          <div className="flex flex-col gap-0.5">
+            {navBottom.map((item) => {
+              const isActive = activePage === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => handleNavigate(item.id)}
+                  className="w-full text-left flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150"
+                  style={{
+                    background: isActive ? 'rgba(200,255,0,0.1)' : 'transparent',
+                    color: isActive ? 'var(--accent)' : 'rgba(255,255,255,0.5)',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) (e.currentTarget as HTMLButtonElement).style.color = '#fff';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.5)';
+                  }}
+                >
+                  <span className="w-4 text-center shrink-0">{item.icon}</span>
+                  <span className="leading-tight">{item.label}</span>
+                  {item.id === 'referrals' && referralCount > 0 && (
+                    <span
+                      className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none"
+                      style={{ background: ACCENT, color: '#0A0A0A' }}
+                    >
+                      {referralCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </nav>
 
         {/* Changelog button */}
@@ -189,7 +217,7 @@ export default function DashboardRoute() {
 
         <header className="h-14 border-b border-white/10 px-6 flex items-center justify-between shrink-0">
           <h1 className="text-white font-semibold text-base">
-            {navItems.find((i) => i.id === activePage)?.label}
+            {allNavItems.find((i) => i.id === activePage)?.label}
           </h1>
 
           <div className="flex items-center gap-3">
@@ -231,11 +259,9 @@ export default function DashboardRoute() {
         </header>
 
         <main className="flex-1 overflow-auto p-6">
-          {activePage === 'dashboard'   && <DashboardPage onNavigate={handleNavigate} />}
-          {activePage === 'archetypes'  && <ArchetypesPage />}
-          {activePage === 'analytics'   && <AnalyticsPage />}
-          {activePage === 'banner-library' && <BannerLibraryPage />}
-          {activePage === 'brands' && isAdmin && <BrandsPage />}
+          {activePage === 'dashboard' && <DashboardPage onNavigate={handleNavigate} />}
+          {activePage === 'brands' && <BrandsPage />}
+          {activePage === 'tools' && <ToolsPage onNavigate={handleNavigate} />}
           {activePage === 'referrals' && (
             <>
               <GoldenPage />
@@ -244,16 +270,13 @@ export default function DashboardRoute() {
               </div>
             </>
           )}
-          {activePage === 'pricing'    && (
+          {activePage === 'pricing' && (
             <div className="max-w-5xl mx-auto">
-              <PricingSection
-                isLoggedIn={true}
-              />
+              <PricingSection isLoggedIn={true} />
             </div>
           )}
-          {activePage === 'settings'    && <SettingsPage />}
+          {activePage === 'settings' && <SettingsPage />}
           {activePage === 'admin' && isAdmin && <AdminPage />}
-          {activePage === 'history'     && <HistoryPage onNavigate={handleNavigate} />}
         </main>
       </div>
 
