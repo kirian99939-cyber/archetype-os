@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { addCredits } from '@/lib/supabase';
 
+export const dynamic = 'force-dynamic';
+
 const ADMIN_EMAILS = ['kirian99939@gmail.com'];
 
 /**
