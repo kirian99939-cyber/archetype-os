@@ -14,6 +14,7 @@ import BannerLibraryPage from '@/components/BannerLibraryPage';
 import AdminPage from '@/components/AdminPage';
 import ReferralDashboard from '@/components/ReferralDashboard';
 import GoldenPage from '@/components/GoldenPage';
+import BrandsPage from '@/components/BrandsPage';
 import AnimatedLogo from '@/components/AnimatedLogo';
 import ChangelogModal, { hasUnseenChangelog } from '@/components/ChangelogModal';
 
@@ -24,6 +25,7 @@ type Page =
   | 'history'
   | 'analytics'
   | 'banner-library'
+  | 'brands'
   | 'referrals'
   | 'pricing'
   | 'settings'
@@ -56,7 +58,10 @@ export default function DashboardRoute() {
 
   const navItems = [
     ...NAV_ITEMS,
-    ...(isAdmin ? [{ id: 'admin' as Page, label: 'Админ', icon: '⚙️' }] : []),
+    ...(isAdmin ? [
+      { id: 'brands' as Page, label: 'Бренды', icon: '◉' },
+      { id: 'admin' as Page, label: 'Админ', icon: '⚙️' },
+    ] : []),
   ];
 
   useEffect(() => {
@@ -230,6 +235,7 @@ export default function DashboardRoute() {
           {activePage === 'archetypes'  && <ArchetypesPage />}
           {activePage === 'analytics'   && <AnalyticsPage />}
           {activePage === 'banner-library' && <BannerLibraryPage />}
+          {activePage === 'brands' && isAdmin && <BrandsPage />}
           {activePage === 'referrals' && (
             <>
               <GoldenPage />

@@ -379,36 +379,37 @@ export function useBannerGeneration({
 
     bannersSavedRef.current = false;
     let targetGroupIndex = 0;
+    const regenKeys: string[] = [];
 
     setBannerGroups(prev => {
       const existingIndex = prev.findIndex(g => g.hypothesisIndex === hypothesisIdx);
       if (existingIndex !== -1) {
-        // Добавляем новые форматы в существующую группу
         targetGroupIndex = existingIndex;
         const existingKeys = new Set(prev[existingIndex].banners.map(b => b.key));
         const newBanners = activeFormats
           .filter(f => !existingKeys.has(f.key))
-          .map(f => ({ ...f, taskId: null, imageUrl: null, loading: true, error: null, refreshCount: 0, previousVersions: [] }));
+          .map(f => ({ ...f, taskId: null, imageUrl: null, loading: true, error: null, refreshCount: 0, previousVersions: [] as string[] }));
         const regenBanners = activeFormats
           .filter(f => existingKeys.has(f.key))
-          .map(f => ({ ...f, taskId: null, imageUrl: null, loading: true, error: null, refreshCount: 0, previousVersions: [] }));
+          .map(f => {
+            const uniqueKey = `${f.key}_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
+            regenKeys.push(uniqueKey);
+            return { ...f, key: uniqueKey, taskId: null, imageUrl: null, loading: true, error: null, refreshCount: 0, previousVersions: [] as string[] };
+          });
         return prev.map((g, gi) => gi !== existingIndex ? g : {
           ...g,
           banners: [
-            ...g.banners.map(b => {
-              const regen = regenBanners.find(r => r.key === b.key);
-              return regen ? { ...b, loading: true, error: null, taskId: null, imageUrl: null } : b;
-            }),
+            ...g.banners,
+            ...regenBanners,
             ...newBanners,
           ],
         });
       } else {
-        // Создаём новую группу
         targetGroupIndex = prev.length;
         return [...prev, {
           hypothesisIndex: hypothesisIdx,
           hypothesisTitle: hypothesis.idea,
-          banners: activeFormats.map(f => ({ ...f, taskId: null, imageUrl: null, loading: true, error: null, refreshCount: 0, previousVersions: [] })),
+          banners: activeFormats.map(f => ({ ...f, taskId: null, imageUrl: null, loading: true, error: null, refreshCount: 0, previousVersions: [] as string[] })),
         }];
       }
     });
@@ -436,6 +437,8 @@ export function useBannerGeneration({
 
     for (let fmtIndex = 0; fmtIndex < activeFormats.length; fmtIndex++) {
       const fmt = activeFormats[fmtIndex];
+      // Для regen баннеров ключ уникальный, для новых — оригинальный
+      const bannerKey = regenKeys[fmtIndex] || fmt.key;
       try {
         const res = await fetch('/api/generate-banner', {
           method: 'POST',
@@ -459,7 +462,7 @@ export function useBannerGeneration({
               gi !== targetGroupIndex ? g : {
                 ...g,
                 banners: g.banners.map(b =>
-                  b.key === fmt.key ? { ...b, loading: false, error: 'Недостаточно кредитов' } : b
+                  b.key === bannerKey ? { ...b, loading: false, error: 'Недостаточно кредитов' } : b
                 ),
               }
             )
@@ -481,13 +484,13 @@ export function useBannerGeneration({
             gi !== targetGroupIndex ? g : {
               ...g,
               banners: g.banners.map(b =>
-                b.key === fmt.key ? { ...b, taskId } : b
+                b.key === bannerKey ? { ...b, taskId } : b
               ),
             }
           )
         );
 
-        await waitForBanner(targetGroupIndex, fmt.key, taskId);
+        await waitForBanner(targetGroupIndex, bannerKey, taskId);
 
         if (fmtIndex < activeFormats.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 2000));
@@ -499,7 +502,7 @@ export function useBannerGeneration({
             gi !== targetGroupIndex ? g : {
               ...g,
               banners: g.banners.map(b =>
-                b.key === fmt.key ? { ...b, loading: false, error: errMsg } : b
+                b.key === bannerKey ? { ...b, loading: false, error: errMsg } : b
               ),
             }
           )
@@ -512,8 +515,12 @@ export function useBannerGeneration({
   const handleDownload = useCallback((banner: BannerItem) => {
     if (!banner.imageUrl) return;
     const a = document.createElement('a');
-    a.href = `/api/download-image?url=${encodeURIComponent(banner.imageUrl)}`;
-    a.download = `banner-${banner.key}-${Date.now()}.png`;
+    console.log('[download] banner:', banner.key, banner.width, banner.height, banner.imageUrl);
+    const params = new URLSearchParams({ url: banner.imageUrl });
+    if (banner.width) params.set('width', String(banner.width));
+    if (banner.height) params.set('height', String(banner.height));
+    a.href = `/api/download-image?${params.toString()}`;
+    a.download = `banner-${banner.key}-${banner.width}x${banner.height}-${Date.now()}.png`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -560,22 +567,32 @@ export function useBannerGeneration({
     const shouldUsePhoto = hypothesis?.usePhoto !== false;
     const imageUrlsToSend = shouldUsePhoto && briefImageUrls.length > 0 ? briefImageUrls : undefined;
 
+    // Создаём новый баннер с уникальным ключом рядом с оригиналом
+    const newKey = `${fmtKey}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+
     setBannerGroups(prev =>
-      prev.map((g, gi) =>
-        gi !== groupIndex ? g : {
-          ...g,
-          banners: g.banners.map(b =>
-            b.key === fmtKey ? {
-              ...b,
-              loading: true,
-              error: null,
-              taskId: null,
-              previousVersions: b.imageUrl ? [...b.previousVersions, b.imageUrl] : b.previousVersions,
-              refreshCount: b.refreshCount + 1,
-            } : b
-          ),
-        }
-      )
+      prev.map((g, gi) => {
+        if (gi !== groupIndex) return g;
+        // Увеличиваем refreshCount у оригинала
+        const updatedBanners = g.banners.map(b =>
+          b.key === fmtKey ? { ...b, refreshCount: b.refreshCount + 1 } : b
+        );
+        // Вставляем новый баннер сразу после оригинала
+        const idx = updatedBanners.findIndex(b => b.key === fmtKey);
+        const newBanner: BannerItem = {
+          ...banner,
+          key: newKey,
+          taskId: null,
+          imageUrl: null,
+          loading: true,
+          error: null,
+          refreshCount: 0,
+          previousVersions: [],
+        };
+        const banners = [...updatedBanners];
+        banners.splice(idx + 1, 0, newBanner);
+        return { ...g, banners };
+      })
     );
 
     try {
@@ -601,7 +618,7 @@ export function useBannerGeneration({
             gi !== groupIndex ? g : {
               ...g,
               banners: g.banners.map(b =>
-                b.key === fmtKey ? { ...b, loading: false, error: 'Недостаточно кредитов' } : b
+                b.key === newKey ? { ...b, loading: false, error: 'Недостаточно кредитов' } : b
               ),
             }
           )
@@ -623,30 +640,22 @@ export function useBannerGeneration({
           gi !== groupIndex ? g : {
             ...g,
             banners: g.banners.map(b =>
-              b.key === fmtKey ? { ...b, taskId } : b
+              b.key === newKey ? { ...b, taskId } : b
             ),
           }
         )
       );
 
-      await waitForBanner(groupIndex, fmtKey, taskId);
+      await waitForBanner(groupIndex, newKey, taskId);
     } catch (err) {
+      const errMsg = err instanceof Error ? err.message : 'Генерация не удалась. Кредиты не списаны — попробуйте ещё раз.';
       setBannerGroups(prev =>
         prev.map((g, gi) =>
           gi !== groupIndex ? g : {
             ...g,
-            banners: g.banners.map(b => {
-              if (b.key !== fmtKey) return b;
-              const prevUrl = b.previousVersions[b.previousVersions.length - 1] || null;
-              return {
-                ...b,
-                loading: false,
-                imageUrl: prevUrl ?? b.imageUrl,
-                error: err instanceof Error ? err.message : 'Генерация не удалась. Кредиты не списаны — попробуйте ещё раз.',
-                previousVersions: prevUrl ? b.previousVersions.slice(0, -1) : b.previousVersions,
-                refreshCount: b.refreshCount - 1,
-              };
-            }),
+            banners: g.banners.map(b =>
+              b.key === newKey ? { ...b, loading: false, error: errMsg } : b
+            ),
           }
         )
       );
