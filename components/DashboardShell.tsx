@@ -14,6 +14,7 @@ type Page =
   | 'history'
   | 'analytics'
   | 'banner-library'
+  | 'brands'
   | 'referrals'
   | 'pricing'
   | 'settings'
@@ -26,6 +27,7 @@ const NAV_ITEMS: { id: Page; label: string; icon: string }[] = [
   { id: 'history',        label: 'История генераций',  icon: '◷' },
   { id: 'analytics',      label: 'Аналитика',          icon: '↗' },
   { id: 'banner-library', label: 'Все баннеры',        icon: '📚' },
+  { id: 'brands',         label: 'Бренды',             icon: '◉' },
   { id: 'referrals',      label: 'Рефералы',           icon: '🎁' },
   { id: 'pricing',        label: 'Тарифы',             icon: '⚡' },
   { id: 'settings',       label: 'Настройки',          icon: '⚙' },

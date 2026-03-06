@@ -14,6 +14,7 @@ import BannerLibraryPage from '@/components/BannerLibraryPage';
 import AdminPage from '@/components/AdminPage';
 import ReferralDashboard from '@/components/ReferralDashboard';
 import GoldenPage from '@/components/GoldenPage';
+import BrandsPage from '@/components/BrandsPage';
 import AnimatedLogo from '@/components/AnimatedLogo';
 import ChangelogModal, { hasUnseenChangelog } from '@/components/ChangelogModal';
 
@@ -24,6 +25,7 @@ type Page =
   | 'history'
   | 'analytics'
   | 'banner-library'
+  | 'brands'
   | 'referrals'
   | 'pricing'
   | 'settings'
@@ -36,6 +38,7 @@ const NAV_ITEMS: { id: Page; label: string; icon: string }[] = [
   { id: 'history',     label: 'История генераций',  icon: '◷' },
   { id: 'analytics',   label: 'Аналитика',          icon: '↗' },
   { id: 'banner-library' as Page, label: 'Все баннеры', icon: '📚' },
+  { id: 'brands' as Page, label: 'Бренды', icon: '◉' },
   { id: 'referrals' as Page, label: 'Рефералы', icon: '🎁' },
   { id: 'pricing' as Page, label: 'Тарифы', icon: '⚡' },
   { id: 'settings',    label: 'Настройки',          icon: '⚙' },
@@ -230,6 +233,7 @@ export default function DashboardRoute() {
           {activePage === 'archetypes'  && <ArchetypesPage />}
           {activePage === 'analytics'   && <AnalyticsPage />}
           {activePage === 'banner-library' && <BannerLibraryPage />}
+          {activePage === 'brands' && <BrandsPage />}
           {activePage === 'referrals' && (
             <>
               <GoldenPage />
