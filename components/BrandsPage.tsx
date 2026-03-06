@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type { Brand } from '@/lib/brand-types';
 
 const ACCENT = '#C8FF00';
@@ -17,6 +18,7 @@ const FIELDS: { key: keyof Brand; label: string; placeholder: string; multiline?
 ];
 
 export default function BrandsPage() {
+  const router = useRouter();
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -116,8 +118,9 @@ export default function BrandsPage() {
           {brands.map((brand) => (
             <div
               key={brand.id}
-              className="rounded-xl border p-5 transition-all duration-150 hover:border-white/20"
+              className="rounded-xl border p-5 transition-all duration-150 hover:border-white/20 cursor-pointer"
               style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
+              onClick={() => router.push(`/brands/${brand.id}`)}
             >
               <div className="flex items-start justify-between mb-3">
                 <div>
@@ -127,7 +130,7 @@ export default function BrandsPage() {
                   )}
                 </div>
                 <button
-                  onClick={() => handleDelete(brand.id)}
+                  onClick={(e) => { e.stopPropagation(); handleDelete(brand.id); }}
                   className="text-white/20 hover:text-red-400 text-xs transition-colors p-1"
                   title="Удалить"
                 >
