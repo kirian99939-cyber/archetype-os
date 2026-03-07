@@ -13,6 +13,7 @@ interface FunnelRequest {
   offer: string;
   characteristics: string;
   brandId?: string;
+  photoUrls?: string[];
 }
 
 const STYLE_PROMPTS: Record<string, string> = {
@@ -48,6 +49,7 @@ function buildSlidePrompt(
   body: FunnelRequest,
   platformStyle: string,
 ): string {
+  const hasPhotos = body.photoUrls && body.photoUrls.length > 0;
   return [
     `Advertising slide ${slideIndex + 1} of ${totalSlides} for a photo funnel.`,
     `Slide purpose: ${slideDesc}.`,
@@ -56,6 +58,7 @@ function buildSlidePrompt(
     body.characteristics ? `Key features: ${body.characteristics}.` : '',
     `Target audience: ${body.audience}.`,
     `Visual style: ${STYLE_PROMPTS[platformStyle] || platformStyle}.`,
+    hasPhotos ? 'Incorporate the provided reference product photos naturally into the composition — use them as key visual elements.' : '',
     'High quality, commercial advertising photography, professional graphic design.',
     'IMPORTANT: All text on the slide must be ONLY in Russian language.',
     slideIndex === 0 ? 'This is the HERO slide — make it the most eye-catching and attention-grabbing.' : '',
@@ -127,11 +130,14 @@ export async function POST(req: NextRequest) {
     for (let i = 0; i < slideCount; i++) {
       const prompt = buildSlidePrompt(slideDescs[i], i, slideCount, body, config.style);
 
-      const nanoBananaPayload = {
+      const nanoBananaPayload: Record<string, unknown> = {
         prompt,
         resolution: '2K',
         aspectRatio,
       };
+      if (body.photoUrls && body.photoUrls.length > 0) {
+        nanoBananaPayload.imageUrls = body.photoUrls;
+      }
 
       const res = await fetch('https://api.nanobananaapi.ai/api/v1/nanobanana/generate-pro', {
         method: 'POST',

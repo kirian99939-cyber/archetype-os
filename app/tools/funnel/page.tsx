@@ -1,11 +1,18 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import DashboardShell from '@/components/DashboardShell';
 import { PLATFORM_CONFIG } from '@/lib/funnel-types';
 import type { FunnelPlatform, InstagramSubtype } from '@/lib/funnel-types';
+
+interface BrandOption {
+  id: string;
+  name: string;
+  audience: string | null;
+  utp: string | null;
+}
 
 const ACCENT = '#C8FF00';
 
@@ -38,6 +45,16 @@ function FunnelContent() {
   const [characteristics, setCharacteristics] = useState('');
   const [generating, setGenerating] = useState(false);
 
+  // Brand selector
+  const [brands, setBrands] = useState<BrandOption[]>([]);
+  const [selectedBrandId, setSelectedBrandId] = useState<string>(brandIdParam || '');
+
+  // Photo upload
+  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoDragOver, setPhotoDragOver] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
   // Step 3
   const [slides, setSlides] = useState<SlideResult[]>([]);
 
@@ -46,22 +63,70 @@ function FunnelContent() {
     if (status === 'unauthenticated') router.replace('/landing');
   }, [status, router]);
 
-  // Auto-fill from brand
+  // Load brands list
   useEffect(() => {
-    if (!brandIdParam) return;
+    if (status !== 'authenticated') return;
     fetch('/api/brands')
       .then((r) => r.json())
       .then((data) => {
-        const brand = (data.brands ?? []).find((b: any) => b.id === brandIdParam);
-        if (brand) {
-          if (brand.name && !product) setProduct(brand.name);
-          if (brand.audience && !audience) setAudience(brand.audience);
-          if (brand.utp && !offer) setOffer(brand.utp);
+        const list: BrandOption[] = (data.brands ?? []).map((b: any) => ({
+          id: b.id, name: b.name, audience: b.audience, utp: b.utp,
+        }));
+        setBrands(list);
+        // Auto-fill if brand_id from URL
+        if (brandIdParam) {
+          const brand = list.find((b) => b.id === brandIdParam);
+          if (brand) {
+            if (brand.name && !product) setProduct(brand.name);
+            if (brand.audience && !audience) setAudience(brand.audience);
+            if (brand.utp && !offer) setOffer(brand.utp);
+          }
         }
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [brandIdParam]);
+  }, [status]);
+
+  // Handle brand selection change
+  const handleBrandChange = (brandId: string) => {
+    setSelectedBrandId(brandId);
+    if (!brandId) return;
+    const brand = brands.find((b) => b.id === brandId);
+    if (brand) {
+      if (brand.name) setProduct(brand.name);
+      if (brand.audience) setAudience(brand.audience);
+      if (brand.utp) setOffer(brand.utp);
+    }
+  };
+
+  // Photo upload
+  const uploadFiles = async (files: FileList | File[]) => {
+    const fileArray = Array.from(files).filter((f) => f.type.startsWith('image/'));
+    if (fileArray.length === 0) return;
+    const remaining = 10 - photoUrls.length;
+    const toUpload = fileArray.slice(0, remaining);
+    if (toUpload.length === 0) return;
+
+    setPhotoUploading(true);
+    for (const file of toUpload) {
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('/api/upload-photo', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.url) {
+          setPhotoUrls((prev) => [...prev, data.url]);
+        }
+      } catch {
+        // silent
+      }
+    }
+    setPhotoUploading(false);
+  };
+
+  const removePhoto = (idx: number) => {
+    setPhotoUrls((prev) => prev.filter((_, i) => i !== idx));
+  };
 
   // Set default slide count when platform changes
   useEffect(() => {
@@ -111,7 +176,8 @@ function FunnelContent() {
           audience: audience.trim(),
           offer: offer.trim(),
           characteristics: characteristics.trim(),
-          brandId: brandIdParam || undefined,
+          brandId: selectedBrandId || brandIdParam || undefined,
+          photoUrls: photoUrls.length > 0 ? photoUrls : undefined,
         }),
       });
 
@@ -366,6 +432,24 @@ function FunnelContent() {
               </div>
 
               <div className="flex flex-col gap-4 max-w-lg">
+                {/* Brand selector */}
+                {brands.length > 0 && (
+                  <div>
+                    <label className="block text-white/50 text-xs font-medium mb-1.5">Бренд</label>
+                    <select
+                      value={selectedBrandId}
+                      onChange={(e) => handleBrandChange(e.target.value)}
+                      className="w-full rounded-lg border px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-white/30"
+                      style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' }}
+                    >
+                      <option value="" style={{ background: '#1a1a1a' }}>Без бренда</option>
+                      {brands.map((b) => (
+                        <option key={b.id} value={b.id} style={{ background: '#1a1a1a' }}>{b.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 {/* Slide count */}
                 <div>
                   <label className="block text-white/50 text-xs font-medium mb-1.5">
@@ -439,6 +523,64 @@ function FunnelContent() {
                     className="w-full rounded-lg border px-3 py-2.5 text-sm text-white placeholder-white/20 outline-none transition-colors focus:border-white/30"
                     style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' }}
                   />
+                </div>
+
+                {/* Photo upload */}
+                <div>
+                  <label className="block text-white/50 text-xs font-medium mb-1.5">Ваши фото товара</label>
+                  <p className="text-white/20 text-[10px] mb-2">Загрузите фото товара — AI использует их как основу для слайдов</p>
+
+                  {/* Drop zone */}
+                  <div
+                    className="rounded-lg border-2 border-dashed p-4 text-center transition-colors cursor-pointer"
+                    style={{
+                      borderColor: photoDragOver ? 'rgba(200,255,0,0.4)' : 'rgba(255,255,255,0.1)',
+                      background: photoDragOver ? 'rgba(200,255,0,0.03)' : 'transparent',
+                    }}
+                    onClick={() => photoInputRef.current?.click()}
+                    onDragOver={(e) => { e.preventDefault(); setPhotoDragOver(true); }}
+                    onDragLeave={() => setPhotoDragOver(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setPhotoDragOver(false);
+                      if (e.dataTransfer.files.length > 0) uploadFiles(e.dataTransfer.files);
+                    }}
+                  >
+                    <p className="text-white/30 text-xs">
+                      {photoUploading ? 'Загрузка...' : `Перетащите фото сюда или нажмите (${photoUrls.length}/10)`}
+                    </p>
+                  </div>
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => { if (e.target.files) uploadFiles(e.target.files); e.target.value = ''; }}
+                  />
+
+                  {/* Photo previews */}
+                  {photoUrls.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {photoUrls.map((url, i) => (
+                        <div key={i} className="relative group">
+                          <img
+                            src={url}
+                            alt={`Photo ${i + 1}`}
+                            className="w-16 h-16 rounded-lg object-cover border"
+                            style={{ borderColor: 'rgba(255,255,255,0.1)' }}
+                          />
+                          <button
+                            onClick={() => removePhoto(i)}
+                            className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[8px] text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                            style={{ background: 'rgba(255,0,0,0.6)' }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Slide preview */}
