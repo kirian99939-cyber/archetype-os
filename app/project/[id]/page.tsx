@@ -6,6 +6,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import DashboardShell from '@/components/DashboardShell';
 import ProjectWorkspace from '@/components/ProjectWorkspace';
 import NewProject from '@/components/NewProject';
+import FunnelWorkspace from '@/components/FunnelWorkspace';
 import AnimatedLogo from '@/components/AnimatedLogo';
 import type { ProjectData } from '@/lib/project-types';
 
@@ -82,10 +83,13 @@ export default function ProjectPage() {
   if (!project) return null;
 
   const isCompleted = project.status === 'completed';
+  const isFunnel = project.status === 'funnel';
 
   return (
     <DashboardShell title={project.title || 'Проект'}>
-      {isCompleted ? (
+      {isFunnel ? (
+        <FunnelWorkspace project={project} />
+      ) : isCompleted ? (
         <ProjectWorkspace project={project} />
       ) : (
         <NewProject initialProject={project} initialStep={initialStep === '2' ? 2 : undefined} />
