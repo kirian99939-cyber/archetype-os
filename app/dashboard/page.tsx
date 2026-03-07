@@ -23,15 +23,13 @@ type Page =
   | 'referrals'
   | 'pricing'
   | 'settings'
-  | 'admin'
-  | 'golden';
+  | 'admin';
 
 interface NavItem {
   id: Page;
   label: string;
   icon: string;
   adminOnly?: boolean;
-  goldenOnly?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -42,7 +40,6 @@ const NAV_ITEMS: NavItem[] = [
 
 const NAV_BOTTOM: NavItem[] = [
   { id: 'referrals', label: 'Рефералы', icon: '🎁' },
-  { id: 'golden', label: 'Золотой кабинет', icon: '👑', goldenOnly: true },
   { id: 'pricing', label: 'Тарифы', icon: '⚡' },
   { id: 'settings', label: 'Настройки', icon: '⚙️' },
   { id: 'admin', label: 'Админ', icon: '🛡️', adminOnly: true },
@@ -72,15 +69,10 @@ function DashboardRoute() {
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [hasNewChangelog, setHasNewChangelog] = useState(false);
   const [referralCount, setReferralCount] = useState(0);
-  const [isGolden, setIsGolden] = useState(false);
   const isAdmin = ADMIN_EMAILS.includes(session?.user?.email || '');
 
   const navTop = NAV_ITEMS.filter(item => !item.adminOnly || isAdmin);
-  const navBottom = NAV_BOTTOM.filter(item => {
-    if (item.adminOnly && !isAdmin) return false;
-    if (item.goldenOnly && !isGolden && !isAdmin) return false;
-    return true;
-  });
+  const navBottom = NAV_BOTTOM.filter(item => !item.adminOnly || isAdmin);
   const allNavItems = [...navTop, ...navBottom];
 
   useEffect(() => {
@@ -105,11 +97,6 @@ function DashboardRoute() {
         .then(data => { if (data.totalReferrals) setReferralCount(data.totalReferrals); })
         .catch(() => {});
 
-      // Проверяем golden-статус
-      fetch('/api/referral/golden')
-        .then(res => res.json())
-        .then(data => { if (data.isGolden) setIsGolden(true); })
-        .catch(() => {});
     }
   }, [status]);
 
@@ -315,7 +302,6 @@ function DashboardRoute() {
             </div>
           )}
           {activePage === 'settings' && <SettingsPage />}
-          {activePage === 'golden' && <GoldenPage />}
           {activePage === 'admin' && isAdmin && <AdminPage />}
         </main>
       </div>
