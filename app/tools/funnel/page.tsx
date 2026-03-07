@@ -58,6 +58,7 @@ function FunnelContent() {
 
   // Step 3
   const [slides, setSlides] = useState<SlideResult[]>([]);
+  const [savedProjectId, setSavedProjectId] = useState<string | null>(null);
 
   // Auth redirect
   useEffect(() => {
@@ -203,6 +204,35 @@ function FunnelContent() {
       setSlides(newSlides);
       setStep(3);
 
+      // Save funnel as project
+      setSavedProjectId(null);
+      const platformLabel = PLATFORM_CONFIG[platform].label;
+      const brandName = selectedBrandId ? brands.find(b => b.id === selectedBrandId)?.name : null;
+      const title = [brandName, platformLabel, product.trim()].filter(Boolean).join(' · ');
+      fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          status: 'funnel',
+          brand_id: selectedBrandId || brandIdParam || undefined,
+          funnel: {
+            platform,
+            subtype: platform === 'instagram' ? subtype : undefined,
+            slideCount,
+            product: product.trim(),
+            audience: audience.trim(),
+            offer: offer.trim(),
+            characteristics: characteristics.trim(),
+            photoUrls,
+            slides: newSlides.map(s => ({
+              index: s.index, taskId: s.taskId, description: s.description, imageUrl: null,
+            })),
+            generatedAt: new Date().toISOString(),
+          },
+        }),
+      }).then(r => r.json()).then(d => { if (d.id) setSavedProjectId(d.id); }).catch(() => {});
+
       // Start polling for each slide
       for (const slide of newSlides) {
         pollSlide(slide.taskId, slide.index);
@@ -267,6 +297,7 @@ function FunnelContent() {
   const handleRegenerateAll = () => {
     setStep(2);
     setSlides([]);
+    setSavedProjectId(null);
   };
 
   // Download all as ZIP (simple: open each in new tab)
@@ -647,9 +678,22 @@ function FunnelContent() {
         {step === 3 && (
           <div>
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-white font-semibold text-base">
-                {platformConfig?.emoji} {platformConfig?.label} — {slides.length} слайдов
-              </h3>
+              <div className="flex items-center gap-3">
+                <h3 className="text-white font-semibold text-base">
+                  {platformConfig?.emoji} {platformConfig?.label} — {slides.length} слайдов
+                </h3>
+                {savedProjectId ? (
+                  <button
+                    onClick={() => router.push(`/project/${savedProjectId}`)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all hover:opacity-80"
+                    style={{ background: 'rgba(200,255,0,0.1)', color: '#C8FF00', border: '1px solid rgba(200,255,0,0.2)' }}
+                  >
+                    ✓ Сохранено → открыть
+                  </button>
+                ) : (
+                  <span className="text-white/20 text-[11px]">сохранение...</span>
+                )}
+              </div>
               <div className="flex gap-2">
                 <button
                   onClick={handleRegenerateAll}

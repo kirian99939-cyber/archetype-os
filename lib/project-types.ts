@@ -39,6 +39,26 @@ export interface BannerGroup {
   banners: BannerItem[];
 }
 
+export interface FunnelSlide {
+  index:       number;
+  taskId:      string;
+  description: string;
+  imageUrl:    string | null;
+}
+
+export interface FunnelData {
+  platform:        string;
+  subtype?:        string;
+  slideCount:      number;
+  product:         string;
+  audience:        string;
+  offer:           string;
+  characteristics: string;
+  photoUrls:       string[];
+  slides:          FunnelSlide[];
+  generatedAt:     string;
+}
+
 /** Полный тип проекта из БД */
 export interface ProjectData {
   id:              string;
@@ -52,6 +72,7 @@ export interface ProjectData {
   banners:         BannerGroup[] | null;
   banner_history:  any[] | null;
   selected_formats?: string[] | null;
+  funnel:          FunnelData | null;
   created_at:      string;
   updated_at:      string;
 }
