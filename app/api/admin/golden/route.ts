@@ -60,8 +60,8 @@ export async function POST(req: NextRequest) {
     .select('id')
     .eq('is_golden', true);
 
-  if ((existing?.length ?? 0) >= 5) {
-    return NextResponse.json({ error: 'Лимит 5 золотых кабинетов достигнут' }, { status: 400 });
+  if ((existing?.length ?? 0) >= 10) {
+    return NextResponse.json({ error: 'Лимит 10 золотых кабинетов достигнут' }, { status: 400 });
   }
 
   const { error } = await supabaseAdmin
