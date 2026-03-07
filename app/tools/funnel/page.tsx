@@ -12,6 +12,7 @@ interface BrandOption {
   name: string;
   audience: string | null;
   utp: string | null;
+  context: string | null;
 }
 
 const ACCENT = '#C8FF00';
@@ -70,16 +71,16 @@ function FunnelContent() {
       .then((r) => r.json())
       .then((data) => {
         const list: BrandOption[] = (data.brands ?? []).map((b: any) => ({
-          id: b.id, name: b.name, audience: b.audience, utp: b.utp,
+          id: b.id, name: b.name, audience: b.audience, utp: b.utp, context: b.context,
         }));
         setBrands(list);
         // Auto-fill if brand_id from URL
         if (brandIdParam) {
           const brand = list.find((b) => b.id === brandIdParam);
           if (brand) {
-            if (brand.name && !product) setProduct(brand.name);
             if (brand.audience && !audience) setAudience(brand.audience);
             if (brand.utp && !offer) setOffer(brand.utp);
+            if (brand.context && !characteristics) setCharacteristics(brand.context);
           }
         }
       })
@@ -93,9 +94,9 @@ function FunnelContent() {
     if (!brandId) return;
     const brand = brands.find((b) => b.id === brandId);
     if (brand) {
-      if (brand.name) setProduct(brand.name);
       if (brand.audience) setAudience(brand.audience);
       if (brand.utp) setOffer(brand.utp);
+      if (brand.context) setCharacteristics(brand.context);
     }
   };
 
@@ -432,21 +433,43 @@ function FunnelContent() {
               </div>
 
               <div className="flex flex-col gap-4 max-w-lg">
-                {/* Brand selector */}
+                {/* Brand quick-fill */}
                 {brands.length > 0 && (
-                  <div>
-                    <label className="block text-white/50 text-xs font-medium mb-1.5">Бренд</label>
-                    <select
-                      value={selectedBrandId}
-                      onChange={(e) => handleBrandChange(e.target.value)}
-                      className="w-full rounded-lg border px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-white/30"
-                      style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' }}
-                    >
-                      <option value="" style={{ background: '#1a1a1a' }}>Без бренда</option>
-                      {brands.map((b) => (
-                        <option key={b.id} value={b.id} style={{ background: '#1a1a1a' }}>{b.name}</option>
-                      ))}
-                    </select>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {selectedBrandId ? (
+                      <>
+                        <span
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium"
+                          style={{ background: 'rgba(200,255,0,0.1)', color: ACCENT, border: '1px solid rgba(200,255,0,0.25)' }}
+                        >
+                          {brands.find((b) => b.id === selectedBrandId)?.name}
+                        </span>
+                        <button
+                          onClick={() => setSelectedBrandId('')}
+                          className="text-white/30 hover:text-white/60 text-xs transition-colors"
+                        >
+                          сменить
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-white/40 text-xs">Заполнить из бренда:</span>
+                        {brands.map((b) => (
+                          <button
+                            key={b.id}
+                            onClick={() => handleBrandChange(b.id)}
+                            className="px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-150"
+                            style={{
+                              background: 'rgba(255,255,255,0.05)',
+                              color: 'rgba(255,255,255,0.5)',
+                              border: '1px solid rgba(255,255,255,0.08)',
+                            }}
+                          >
+                            {b.name}
+                          </button>
+                        ))}
+                      </>
+                    )}
                   </div>
                 )}
 
