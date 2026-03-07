@@ -106,6 +106,228 @@ function SaveButton({ onClick, saving, saved }: { onClick: () => void; saving: b
   );
 }
 
+// ─── Overview Tab ─────────────────────────────────────────────────────────────
+
+interface OverviewTabProps {
+  brand: Brand;
+  projects: any[];
+  projectsLoading: boolean;
+  onTabChange: (tab: Tab) => void;
+  onNewProject: () => void;
+}
+
+function OverviewTab({ brand, projects, projectsLoading, onTabChange, onNewProject }: OverviewTabProps) {
+  const router = useRouter();
+
+  // Metrics
+  const totalProjects = projects.length;
+  let totalMaterials = 0;
+  for (const p of projects) {
+    if (!Array.isArray(p.banners)) continue;
+    for (const g of p.banners) {
+      if (Array.isArray(g.banners)) {
+        totalMaterials += g.banners.filter((b: any) => b.imageUrl).length;
+      }
+    }
+  }
+  const lastProject = projects.length > 0 ? projects[0] : null;
+  const lastActivity = lastProject
+    ? new Date(lastProject.updated_at || lastProject.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+    : '—';
+
+  // Profile completeness
+  const meta = brand.meta ?? {};
+  const checks = [
+    { label: 'Миссия', done: !!meta.mission },
+    { label: 'Аудитория', done: !!brand.audience },
+    { label: 'Конкуренты', done: !!(meta.competitors && meta.competitors.length > 0) },
+    { label: 'Цвета бренда', done: !!(brand.colors && brand.colors.length > 0) },
+    { label: 'Tone of voice', done: !!brand.tone_of_voice },
+  ];
+  const filled = checks.filter((c) => c.done).length;
+  const percent = Math.round((filled / checks.length) * 100);
+  const nextTip = checks.find((c) => !c.done);
+
+  const recentProjects = projects.slice(0, 3);
+
+  return (
+    <div className="flex flex-col gap-5">
+
+      {/* ── Block 1: Brand header ── */}
+      <div
+        className="rounded-xl border p-5 flex items-center gap-4"
+        style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
+      >
+        {brand.logo_url ? (
+          <img
+            src={brand.logo_url}
+            alt={brand.name}
+            className="w-14 h-14 rounded-xl object-contain shrink-0"
+            style={{ background: 'rgba(255,255,255,0.05)' }}
+          />
+        ) : (
+          <div
+            className="w-14 h-14 rounded-xl flex items-center justify-center text-2xl font-bold shrink-0"
+            style={{ background: 'rgba(200,255,0,0.1)', color: ACCENT }}
+          >
+            {brand.name[0]?.toUpperCase()}
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <h3 className="text-white font-bold text-lg">{brand.name}</h3>
+          {brand.website && (
+            <p className="text-white/30 text-xs truncate">{brand.website}</p>
+          )}
+        </div>
+        <button
+          onClick={() => onTabChange('settings')}
+          className="px-4 py-2 rounded-lg text-xs font-medium transition-all duration-150 shrink-0"
+          style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.08)' }}
+        >
+          Редактировать
+        </button>
+      </div>
+
+      {/* ── Block 2: Metrics ── */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: 'Проектов', value: projectsLoading ? '...' : String(totalProjects) },
+          { label: 'Материалов', value: projectsLoading ? '...' : String(totalMaterials) },
+          { label: 'Последняя активность', value: projectsLoading ? '...' : lastActivity },
+        ].map((m) => (
+          <div
+            key={m.label}
+            className="rounded-xl border p-4"
+            style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
+          >
+            <p className="text-white/40 text-[10px] uppercase tracking-wider font-medium">{m.label}</p>
+            <p className="text-white font-bold text-xl mt-1">{m.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Block 3: Quick actions ── */}
+      <div className="flex gap-3">
+        <button
+          onClick={onNewProject}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 hover:scale-[1.02]"
+          style={{ background: ACCENT, color: '#0A0A0A' }}
+        >
+          <span>+</span>
+          <span>Новый проект</span>
+        </button>
+        <button
+          onClick={() => onTabChange('materials')}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"
+          style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.08)' }}
+        >
+          Все материалы
+        </button>
+      </div>
+
+      {/* ── Block 4: Recent projects ── */}
+      <div
+        className="rounded-xl border p-5"
+        style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-white font-semibold text-sm">Последние проекты</h4>
+          {projects.length > 3 && (
+            <button
+              onClick={() => onTabChange('projects')}
+              className="text-xs font-medium transition-colors"
+              style={{ color: ACCENT }}
+            >
+              Все проекты →
+            </button>
+          )}
+        </div>
+        {projectsLoading ? (
+          <p className="text-white/40 text-xs py-4 text-center">Загрузка...</p>
+        ) : recentProjects.length === 0 ? (
+          <p className="text-white/20 text-xs py-4 text-center">Проектов пока нет</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {recentProjects.map((project: any) => (
+              <div
+                key={project.id}
+                onClick={() => router.push(`/project/${project.id}`)}
+                className="flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all duration-150 hover:bg-white/5"
+              >
+                <div>
+                  <p className="text-white text-sm font-medium">{project.title || 'Без названия'}</p>
+                  <p className="text-white/30 text-[10px] mt-0.5">
+                    {new Date(project.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </p>
+                </div>
+                <span
+                  className="text-[10px] font-medium px-2 py-1 rounded-full"
+                  style={{
+                    background: project.status === 'completed' ? 'rgba(100,220,150,0.1)' : 'rgba(200,255,0,0.1)',
+                    color: project.status === 'completed' ? 'rgba(100,220,150,0.9)' : ACCENT,
+                  }}
+                >
+                  {project.status === 'completed' ? 'Готов' : project.status === 'draft' ? 'Черновик' : 'В работе'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Block 5: Profile completeness ── */}
+      <div
+        className="rounded-xl border p-5"
+        style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-white font-semibold text-sm">Заполненность профиля</h4>
+          <span className="text-xs font-bold" style={{ color: percent === 100 ? 'rgba(100,220,150,0.9)' : ACCENT }}>
+            {percent}%
+          </span>
+        </div>
+
+        {/* Progress bar */}
+        <div className="h-2 rounded-full overflow-hidden mb-3" style={{ background: 'rgba(255,255,255,0.06)' }}>
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{
+              width: `${percent}%`,
+              background: percent === 100 ? 'rgba(100,220,150,0.8)' : ACCENT,
+            }}
+          />
+        </div>
+
+        {/* Checklist */}
+        <div className="flex flex-wrap gap-2 mb-3">
+          {checks.map((c) => (
+            <span
+              key={c.label}
+              className="text-[10px] font-medium px-2 py-1 rounded-full"
+              style={{
+                background: c.done ? 'rgba(100,220,150,0.1)' : 'rgba(255,255,255,0.04)',
+                color: c.done ? 'rgba(100,220,150,0.8)' : 'rgba(255,255,255,0.3)',
+              }}
+            >
+              {c.done ? '✓' : '○'} {c.label}
+            </span>
+          ))}
+        </div>
+
+        {nextTip && (
+          <button
+            onClick={() => onTabChange('settings')}
+            className="text-xs transition-colors"
+            style={{ color: ACCENT }}
+          >
+            Заполнить: {nextTip.label} →
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Materials Tab ────────────────────────────────────────────────────────────
 
 const MATERIAL_FILTERS: { id: MaterialFilter; label: string }[] = [
@@ -553,12 +775,13 @@ export default function BrandDetailPage() {
 
         {/* ══════ Overview ══════ */}
         {activeTab === 'overview' && (
-          <div
-            className="rounded-xl border p-8 text-center"
-            style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
-          >
-            <p className="text-white/30 text-sm">Раздел в разработке</p>
-          </div>
+          <OverviewTab
+            brand={brand}
+            projects={projects}
+            projectsLoading={projectsLoading}
+            onTabChange={setActiveTab}
+            onNewProject={() => setShowNewProjectModal(true)}
+          />
         )}
 
         {/* ══════ Projects ══════ */}
