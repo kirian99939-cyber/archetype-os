@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSession, signOut } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import DashboardPage from '@/components/DashboardPage';
 import PricingSection from '@/components/PricingSection';
@@ -49,9 +49,22 @@ const ADMIN_EMAILS = ['kirian99939@gmail.com'];
 
 const ACCENT = '#C8FF00';
 
-export default function DashboardRoute() {
+export default function DashboardWrapper() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex flex-col items-center justify-center" style={{ background: 'var(--background)' }}>
+        <p className="text-white/40 text-sm">Загрузка...</p>
+      </div>
+    }>
+      <DashboardRoute />
+    </Suspense>
+  );
+}
+
+function DashboardRoute() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [activePage, setActivePage] = useState<Page>('dashboard');
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [hasNewChangelog, setHasNewChangelog] = useState(false);
@@ -85,6 +98,18 @@ export default function DashboardRoute() {
         .catch(() => {});
     }
   }, [status]);
+
+  // Read URL params on load (e.g. ?page=new-project&brand_id=...)
+  useEffect(() => {
+    const page = searchParams.get('page');
+    const brandId = searchParams.get('brand_id');
+    if (page === 'new-project') {
+      const url = brandId ? `/project/new?brand_id=${brandId}` : '/project/new';
+      router.push(url);
+    } else if (page === 'brands') {
+      setActivePage('brands');
+    }
+  }, [searchParams, router]);
 
   const handleNavigate = useCallback((page: Page | string) => {
     const target = page as Page;
