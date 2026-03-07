@@ -8,14 +8,25 @@ import NewProjectModal from '@/components/NewProjectModal';
 
 const ACCENT = '#C8FF00';
 
-type Tab = 'overview' | 'projects' | 'banners' | 'settings';
+type Tab = 'overview' | 'projects' | 'materials' | 'settings';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Обзор' },
   { id: 'projects', label: 'Проекты' },
-  { id: 'banners', label: 'Баннеры' },
+  { id: 'materials', label: 'Материалы' },
   { id: 'settings', label: 'Настройки' },
 ];
+
+type MaterialFilter = 'all' | 'banners' | 'video' | 'texts';
+
+interface MaterialItem {
+  id: string;
+  imageUrl: string;
+  projectTitle: string;
+  projectId: string;
+  formatLabel: string;
+  date: string;
+}
 
 const AUDIENCE_PLATFORMS = [
   'Instagram', 'TikTok', 'VK', 'Telegram', 'YouTube',
@@ -91,6 +102,139 @@ function SaveButton({ onClick, saving, saved }: { onClick: () => void; saving: b
         {saving ? 'Сохранение...' : 'Сохранить'}
       </button>
       {saved && <span className="text-xs" style={{ color: ACCENT }}>Сохранено</span>}
+    </div>
+  );
+}
+
+// ─── Materials Tab ────────────────────────────────────────────────────────────
+
+const MATERIAL_FILTERS: { id: MaterialFilter; label: string }[] = [
+  { id: 'all', label: 'Все' },
+  { id: 'banners', label: 'Баннеры' },
+  { id: 'video', label: 'Видео' },
+  { id: 'texts', label: 'Тексты' },
+];
+
+function MaterialsTab({ projects, loading, brandId }: { projects: any[]; loading: boolean; brandId: string }) {
+  const [filter, setFilter] = useState<MaterialFilter>('all');
+  const router = useRouter();
+
+  // Extract all banner materials from projects
+  const materials: MaterialItem[] = [];
+  for (const project of projects) {
+    if (!Array.isArray(project.banners)) continue;
+    for (const group of project.banners) {
+      if (!Array.isArray(group.banners)) continue;
+      for (const banner of group.banners) {
+        if (!banner.imageUrl) continue;
+        materials.push({
+          id: `${project.id}-${banner.key}-${group.hypothesisIndex}`,
+          imageUrl: banner.imageUrl,
+          projectTitle: project.title || 'Без названия',
+          projectId: project.id,
+          formatLabel: banner.label || banner.key,
+          date: project.created_at,
+        });
+      }
+    }
+  }
+
+  // For now only banners exist, so filter just shows banners or all
+  const filtered = filter === 'all' || filter === 'banners' ? materials : [];
+
+  const handleDownload = async (imageUrl: string, filename: string) => {
+    try {
+      const res = await fetch(`/api/download-image?url=${encodeURIComponent(imageUrl)}`);
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename + '.png';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch {
+      window.open(imageUrl, '_blank');
+    }
+  };
+
+  if (loading) {
+    return <p className="text-white/40 text-sm py-8 text-center">Загрузка...</p>;
+  }
+
+  return (
+    <div>
+      {/* Filters */}
+      <div className="flex gap-1.5 mb-5">
+        {MATERIAL_FILTERS.map((f) => {
+          const isActive = filter === f.id;
+          const disabled = f.id === 'video' || f.id === 'texts';
+          return (
+            <button
+              key={f.id}
+              onClick={() => !disabled && setFilter(f.id)}
+              disabled={disabled}
+              className="px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
+              style={{
+                background: isActive ? 'rgba(200,255,0,0.15)' : 'rgba(255,255,255,0.05)',
+                color: isActive ? ACCENT : disabled ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.5)',
+                border: `1px solid ${isActive ? 'rgba(200,255,0,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                cursor: disabled ? 'default' : 'pointer',
+              }}
+            >
+              {f.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {filtered.length === 0 ? (
+        <div
+          className="rounded-xl border border-dashed p-12 text-center"
+          style={{ borderColor: 'rgba(200,255,0,0.2)' }}
+        >
+          <p className="text-white/30 text-lg mb-2">Нет материалов</p>
+          <p className="text-white/20 text-sm">Создайте первый проект чтобы увидеть материалы</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {filtered.map((m) => (
+            <div
+              key={m.id}
+              className="group rounded-xl border overflow-hidden transition-all duration-150 hover:border-white/20"
+              style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
+            >
+              {/* Preview */}
+              <div
+                className="relative aspect-square cursor-pointer"
+                onClick={() => router.push(`/project/${m.projectId}`)}
+              >
+                <img
+                  src={m.imageUrl}
+                  alt={m.formatLabel}
+                  className="w-full h-full object-cover"
+                />
+                {/* Download overlay */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDownload(m.imageUrl, `${m.projectTitle}-${m.formatLabel}`); }}
+                  className="absolute top-2 right-2 w-8 h-8 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-sm"
+                  style={{ background: 'rgba(0,0,0,0.7)', color: '#fff' }}
+                  title="Скачать"
+                >
+                  ↓
+                </button>
+              </div>
+
+              {/* Info */}
+              <div className="px-3 py-2.5">
+                <p className="text-white text-xs font-medium truncate">{m.projectTitle}</p>
+                <p className="text-white/30 text-[10px] mt-0.5">
+                  {m.formatLabel} · {new Date(m.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -483,14 +627,9 @@ export default function BrandDetailPage() {
           </div>
         )}
 
-        {/* ══════ Banners ══════ */}
-        {activeTab === 'banners' && (
-          <div
-            className="rounded-xl border p-8 text-center"
-            style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
-          >
-            <p className="text-white/30 text-sm">Раздел в разработке</p>
-          </div>
+        {/* ══════ Materials ══════ */}
+        {activeTab === 'materials' && (
+          <MaterialsTab projects={projects} loading={projectsLoading} brandId={brandId} />
         )}
 
         {/* ══════ Settings ══════ */}
