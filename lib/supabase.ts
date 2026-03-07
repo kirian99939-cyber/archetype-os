@@ -178,12 +178,16 @@ export async function getProject(projectId: string) {
 
 /** Возвращает золотой профиль пользователя с его рефералами и начислениями */
 export async function getGoldenProfile(userId: string) {
+  console.log('[getGoldenProfile] checking userId:', userId);
+
   const { data: user } = await supabaseAdmin
     .from('users')
     .select('id, email, name, referral_code, is_golden')
     .eq('id', userId)
     .eq('is_golden', true)
     .maybeSingle();
+
+  console.log('[getGoldenProfile] query result:', user);
 
   if (!user) return null;
 
