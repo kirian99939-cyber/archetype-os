@@ -300,20 +300,48 @@ function FunnelContent() {
     setSavedProjectId(null);
   };
 
-  // Download all as ZIP (simple: open each in new tab)
   const handleDownloadAll = async () => {
     const ready = slides.filter((s) => s.imageUrl);
-    for (const s of ready) {
+    if (ready.length === 0) return;
+
+    // Single slide — download directly
+    if (ready.length === 1) {
       try {
-        const res = await fetch(`/api/download-image?url=${encodeURIComponent(s.imageUrl!)}`);
-        if (!res.ok) continue;
+        const res = await fetch(`/api/download-image?url=${encodeURIComponent(ready[0].imageUrl!)}`);
+        if (!res.ok) throw new Error();
         const blob = await res.blob();
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `slide-${s.index + 1}.png`;
+        a.download = `slide-1.png`;
         a.click();
         URL.revokeObjectURL(a.href);
       } catch {
+        window.open(ready[0].imageUrl!, '_blank');
+      }
+      return;
+    }
+
+    // Multiple slides — ZIP
+    try {
+      const platformLabel = platform ? PLATFORM_CONFIG[platform].label.toLowerCase().replace(/\s+/g, '-') : 'funnel';
+      const res = await fetch('/api/download-zip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          urls: ready.map(s => s.imageUrl!),
+          prefix: platformLabel,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${platformLabel}-funnel.zip`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch {
+      // Fallback: open each in new tab
+      for (const s of ready) {
         window.open(s.imageUrl!, '_blank');
       }
     }
