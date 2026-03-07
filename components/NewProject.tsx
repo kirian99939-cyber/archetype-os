@@ -60,9 +60,10 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 interface NewProjectProps {
   onBusyChange?: (busy: boolean) => void;
   initialProject?: ProjectData;
+  initialStep?: 2;
 }
 
-export default function NewProject({ onBusyChange, initialProject }: NewProjectProps) {
+export default function NewProject({ onBusyChange, initialProject, initialStep }: NewProjectProps) {
   const { data: session } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -676,6 +677,8 @@ export default function NewProject({ onBusyChange, initialProject }: NewProjectP
     } else if (initialProject.hypotheses?.length || initialProject.status === 'hypotheses') {
       goTo(3);
     } else if (initialProject.archetype?.id || initialProject.status === 'archetype') {
+      goTo(2);
+    } else if (initialStep === 2) {
       goTo(2);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

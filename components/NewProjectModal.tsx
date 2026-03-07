@@ -82,7 +82,7 @@ export default function NewProjectModal({ brandId, brandName, brandData, onClose
       });
       const data = await res.json();
       if (res.ok && data.id) {
-        router.push(`/project/${data.id}`);
+        router.push(`/project/${data.id}?step=2`);
       }
     } catch {
       // silent

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import DashboardShell from '@/components/DashboardShell';
 import ProjectWorkspace from '@/components/ProjectWorkspace';
 import NewProject from '@/components/NewProject';
@@ -14,6 +14,8 @@ export default function ProjectPage() {
   const router = useRouter();
   const params = useParams();
   const projectId = params.id as string;
+  const searchParams = useSearchParams();
+  const initialStep = searchParams.get('step');
 
   const [project, setProject] = useState<ProjectData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,7 +88,7 @@ export default function ProjectPage() {
       {isCompleted ? (
         <ProjectWorkspace project={project} />
       ) : (
-        <NewProject initialProject={project} />
+        <NewProject initialProject={project} initialStep={initialStep === '2' ? 2 : undefined} />
       )}
     </DashboardShell>
   );
