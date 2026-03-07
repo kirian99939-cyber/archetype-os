@@ -55,15 +55,6 @@ export async function POST(req: NextRequest) {
 
   const { email, referralCode } = await req.json();
 
-  const { data: existing } = await supabaseAdmin
-    .from('users')
-    .select('id')
-    .eq('is_golden', true);
-
-  if ((existing?.length ?? 0) >= 10) {
-    return NextResponse.json({ error: 'Лимит 10 золотых кабинетов достигнут' }, { status: 400 });
-  }
-
   const { error } = await supabaseAdmin
     .from('users')
     .update({ is_golden: true, referral_code: referralCode })
