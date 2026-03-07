@@ -179,7 +179,7 @@ export default function BrandDetailPage() {
             <div className="flex items-center justify-between mb-4">
               <p className="text-white/40 text-sm">Проекты бренда</p>
               <button
-                onClick={() => router.push(`/project/new?brand_id=${brandId}`)}
+                onClick={() => router.push(`/dashboard?page=new-project&brand_id=${brandId}`)}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 hover:scale-[1.02]"
                 style={{ background: ACCENT, color: '#0A0A0A' }}
               >
@@ -211,6 +211,16 @@ export default function BrandDetailPage() {
                       <h4 className="text-white font-medium text-sm">{project.title || 'Без названия'}</h4>
                       <p className="text-white/30 text-xs mt-0.5">
                         {new Date(project.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {' · '}
+                        {Array.isArray(project.banners) ? project.banners.length : 0} баннер{(() => {
+                          const count = Array.isArray(project.banners) ? project.banners.length : 0;
+                          const mod10 = count % 10;
+                          const mod100 = count % 100;
+                          if (mod100 >= 11 && mod100 <= 19) return 'ов';
+                          if (mod10 === 1) return '';
+                          if (mod10 >= 2 && mod10 <= 4) return 'а';
+                          return 'ов';
+                        })()}
                       </p>
                     </div>
                     <span
