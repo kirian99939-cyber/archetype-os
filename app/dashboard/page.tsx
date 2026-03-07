@@ -69,6 +69,7 @@ function DashboardRoute() {
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [hasNewChangelog, setHasNewChangelog] = useState(false);
   const [referralCount, setReferralCount] = useState(0);
+  const [isGolden, setIsGolden] = useState(false);
   const isAdmin = ADMIN_EMAILS.includes(session?.user?.email || '');
 
   const navTop = NAV_ITEMS.filter(item => !item.adminOnly || isAdmin);
@@ -97,6 +98,10 @@ function DashboardRoute() {
         .then(data => { if (data.totalReferrals) setReferralCount(data.totalReferrals); })
         .catch(() => {});
 
+      fetch('/api/referral/golden')
+        .then(res => res.json())
+        .then(data => { if (data.isGolden) setIsGolden(true); })
+        .catch(() => {});
     }
   }, [status]);
 
@@ -290,8 +295,8 @@ function DashboardRoute() {
           {activePage === 'tools' && <ToolsPage onNavigate={handleNavigate} />}
           {activePage === 'referrals' && (
             <>
-              <GoldenPage />
-              <div className="mt-8">
+              {isGolden && <GoldenPage />}
+              <div className={isGolden ? 'mt-8' : ''}>
                 <ReferralDashboard />
               </div>
             </>
