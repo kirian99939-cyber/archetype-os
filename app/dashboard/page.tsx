@@ -145,7 +145,7 @@ function DashboardRoute() {
       {/* Sidebar */}
       <aside
         className="flex flex-col border-r border-white/10 shrink-0"
-        style={{ width: 'var(--sidebar-width)' }}
+        style={{ width: 'var(--sidebar-width)', height: '100vh', position: 'sticky', top: 0 }}
       >
         <div className="h-14 flex items-center px-4 border-b border-white/10">
           <Image src="/logo.svg" alt="Креатика" height={28} width={114} priority />
@@ -158,7 +158,7 @@ function DashboardRoute() {
           </p>
         </div>
 
-        <nav className="flex-1 px-2 py-3 flex flex-col justify-between">
+        <nav className="flex-1 px-2 py-3 flex flex-col justify-between overflow-hidden min-h-0">
           {/* Top nav */}
           <div className="flex flex-col gap-0.5">
             {navTop.map((item) => {
