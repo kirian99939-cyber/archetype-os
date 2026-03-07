@@ -40,6 +40,32 @@ export async function GET(req: NextRequest) {
       get(/<meta[^>]+property="og:image"[^>]+content="([^"]*)"/) ||
       get(/<meta[^>]+content="([^"]*)"[^>]+property="og:image"/);
 
+    // Logo: og:image → link[rel=icon] → apple-touch-icon → /favicon.ico
+    const baseUrl = new URL(finalUrl);
+    const toAbsolute = (href: string): string => {
+      if (!href) return '';
+      if (href.startsWith('http')) return href;
+      if (href.startsWith('//')) return baseUrl.protocol + href;
+      if (href.startsWith('/')) return baseUrl.origin + href;
+      return baseUrl.origin + '/' + href;
+    };
+
+    const linkIcon =
+      get(/<link[^>]+rel="icon"[^>]+href="([^"]*)"/) ||
+      get(/<link[^>]+href="([^"]*)"[^>]+rel="icon"/) ||
+      get(/<link[^>]+rel="shortcut icon"[^>]+href="([^"]*)"/) ||
+      get(/<link[^>]+href="([^"]*)"[^>]+rel="shortcut icon"/);
+
+    const appleTouchIcon =
+      get(/<link[^>]+rel="apple-touch-icon"[^>]+href="([^"]*)"/) ||
+      get(/<link[^>]+href="([^"]*)"[^>]+rel="apple-touch-icon"/);
+
+    const logoUrl =
+      (ogImage ? toAbsolute(ogImage) : '') ||
+      (linkIcon ? toAbsolute(linkIcon) : '') ||
+      (appleTouchIcon ? toAbsolute(appleTouchIcon) : '') ||
+      baseUrl.origin + '/favicon.ico';
+
     // Extract brand colors from CSS
     const colorMatches = html.match(/#[0-9a-fA-F]{6}/g) ?? [];
     const unique = Array.from(new Set(colorMatches.map(c => c.toUpperCase())));
@@ -47,7 +73,7 @@ export async function GET(req: NextRequest) {
     const filtered = unique.filter(c => !['#FFFFFF', '#000000', '#111111', '#222222', '#333333', '#F5F5F5', '#FAFAFA', '#EEEEEE', '#CCCCCC', '#999999', '#666666'].includes(c));
     const colors = filtered.slice(0, 5);
 
-    return NextResponse.json({ title, description, ogImage, colors });
+    return NextResponse.json({ title, description, ogImage, logoUrl, colors });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to fetch';
     return NextResponse.json({ error: message }, { status: 502 });

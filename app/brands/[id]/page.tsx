@@ -116,6 +116,7 @@ export default function BrandDetailPage() {
   const [logoUrl, setLogoUrl] = useState('');
   const [mission, setMission] = useState('');
   const [parsingSite, setParsingSite] = useState(false);
+  const [parsedLogoUrl, setParsedLogoUrl] = useState<string | null>(null);
 
   // 2. Audience
   const [audience, setAudience] = useState('');
@@ -276,6 +277,7 @@ export default function BrandDetailPage() {
       if (data.title && !name.trim()) setName(data.title);
       if (data.description && !mission.trim()) setMission(data.description);
       if (data.colors?.length && colors.length === 0) setColors(data.colors);
+      if (data.logoUrl && !logoUrl) setParsedLogoUrl(data.logoUrl);
     } catch {
       // silent
     } finally {
@@ -556,8 +558,32 @@ export default function BrandDetailPage() {
                       className="hidden"
                       onChange={(e) => { if (e.target.files?.[0]) handleLogoUpload(e.target.files[0]); }}
                     />
-                    <p className="text-white/20 text-xs">PNG, JPG, SVG</p>
+                    <p className="text-white/20 text-xs">PNG, JPG, WEBP</p>
                   </div>
+                  {parsedLogoUrl && !logoUrl && (
+                    <div
+                      className="flex items-center gap-3 mt-2 p-2.5 rounded-lg border"
+                      style={{ borderColor: 'rgba(200,255,0,0.2)', background: 'rgba(200,255,0,0.05)' }}
+                    >
+                      <img
+                        src={parsedLogoUrl}
+                        alt="Parsed logo"
+                        className="w-10 h-10 rounded object-contain"
+                        style={{ background: 'rgba(255,255,255,0.1)' }}
+                        onError={() => setParsedLogoUrl(null)}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white/50 text-xs truncate">Найден на сайте</p>
+                      </div>
+                      <button
+                        onClick={() => { setLogoUrl(parsedLogoUrl); setParsedLogoUrl(null); }}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium shrink-0"
+                        style={{ background: ACCENT, color: '#0A0A0A' }}
+                      >
+                        Использовать
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div>
