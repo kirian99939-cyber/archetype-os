@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+
 const ACCENT = '#C8FF00';
 
 interface Props {
@@ -13,6 +15,15 @@ const TOOLS = [
     description: 'Создавайте рекламные баннеры с помощью AI на основе архетипов',
     icon: '🎨',
     available: true,
+    href: null as string | null,
+  },
+  {
+    id: 'funnel-generator',
+    title: 'Фотоворонки',
+    description: 'Серии слайдов для Авито, маркетплейсов, Instagram и сторис',
+    icon: '📸',
+    available: true,
+    href: '/tools/funnel',
   },
   {
     id: 'video-generator',
@@ -20,6 +31,7 @@ const TOOLS = [
     description: 'AI-видео для рекламы и соцсетей',
     icon: '🎬',
     available: false,
+    href: null,
   },
   {
     id: 'text-generator',
@@ -27,10 +39,12 @@ const TOOLS = [
     description: 'Рекламные тексты, заголовки и описания',
     icon: '✍️',
     available: false,
+    href: null,
   },
 ];
 
 export default function ToolsPage({ onNavigate }: Props) {
+  const router = useRouter();
   return (
     <div className="max-w-4xl mx-auto">
       <div className="mb-6">
@@ -56,7 +70,7 @@ export default function ToolsPage({ onNavigate }: Props) {
 
             {tool.available ? (
               <button
-                onClick={() => onNavigate('new-project')}
+                onClick={() => tool.href ? router.push(tool.href) : onNavigate('new-project')}
                 className="w-full px-4 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 hover:scale-[1.02]"
                 style={{ background: ACCENT, color: '#0A0A0A' }}
               >

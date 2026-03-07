@@ -11,9 +11,10 @@ const PLATFORMS = [
 ];
 
 const TOOLS = [
-  { id: 'banners', icon: '🖼', label: 'Баннеры', active: true },
-  { id: 'video', icon: '🎬', label: 'Видео', active: false },
-  { id: 'texts', icon: '✍️', label: 'Тексты', active: false },
+  { id: 'banners', icon: '🖼', label: 'Баннеры', active: true, href: null as string | null },
+  { id: 'funnels', icon: '📸', label: 'Фотоворонки', active: true, href: '/tools/funnel' },
+  { id: 'video', icon: '🎬', label: 'Видео', active: false, href: null },
+  { id: 'texts', icon: '✍️', label: 'Тексты', active: false, href: null },
 ] as const;
 
 interface BrandData {
@@ -115,11 +116,20 @@ export default function NewProjectModal({ brandId, brandName, brandData, onClose
             <h3 className="text-white font-bold text-lg mb-1">Что создаём?</h3>
             <p className="text-white/40 text-sm mb-5">Выберите тип контента</p>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {TOOLS.map((tool) => (
                 <button
                   key={tool.id}
-                  onClick={() => { if (tool.active) setStep(2); }}
+                  onClick={() => {
+                    if (!tool.active) return;
+                    if (tool.href) {
+                      const url = brandId ? `${tool.href}?brand_id=${brandId}` : tool.href;
+                      router.push(url);
+                      onClose();
+                    } else {
+                      setStep(2);
+                    }
+                  }}
                   disabled={!tool.active}
                   className="relative flex flex-col items-center gap-2 rounded-xl border p-5 transition-all duration-150"
                   style={{
