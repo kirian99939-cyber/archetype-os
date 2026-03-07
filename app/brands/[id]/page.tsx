@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import type { Brand } from '@/lib/brand-types';
+import type { Brand, BrandMeta } from '@/lib/brand-types';
 import DashboardShell from '@/components/DashboardShell';
 import NewProjectModal from '@/components/NewProjectModal';
 
@@ -17,14 +17,85 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'settings', label: 'Настройки' },
 ];
 
-const FIELDS: { key: string; label: string; placeholder: string; multiline?: boolean }[] = [
-  { key: 'name', label: 'Название бренда', placeholder: 'Nike, Яндекс...' },
-  { key: 'website', label: 'Сайт', placeholder: 'https://...' },
-  { key: 'audience', label: 'Целевая аудитория', placeholder: 'Мужчины 25-35, предприниматели...', multiline: true },
-  { key: 'utp', label: 'УТП', placeholder: 'Уникальное торговое предложение...', multiline: true },
-  { key: 'tone_of_voice', label: 'Тон коммуникации', placeholder: 'Дружелюбный, экспертный, провокационный...', multiline: true },
-  { key: 'context', label: 'Контекст / описание', placeholder: 'Дополнительная информация о бренде...', multiline: true },
+const AUDIENCE_PLATFORMS = [
+  'Instagram', 'TikTok', 'VK', 'Telegram', 'YouTube',
+  'Facebook', 'Twitter/X', 'LinkedIn', 'Одноклассники', 'Pinterest',
 ];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function SectionCard({ title, children, defaultOpen = false }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="rounded-xl border" style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-5 py-4 text-left"
+      >
+        <h3 className="text-white font-semibold text-sm">{title}</h3>
+        <span className="text-white/30 text-xs">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="px-5 pb-5 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
+  return (
+    <label className="block text-white/50 text-xs font-medium mb-1.5">
+      {children}
+      {required && <span style={{ color: ACCENT }}> *</span>}
+    </label>
+  );
+}
+
+function TextInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="w-full rounded-lg border px-3 py-2.5 text-sm text-white placeholder-white/20 outline-none transition-colors focus:border-white/30"
+      style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' }}
+    />
+  );
+}
+
+function TextArea({ value, onChange, placeholder, rows = 3 }: { value: string; onChange: (v: string) => void; placeholder: string; rows?: number }) {
+  return (
+    <textarea
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      rows={rows}
+      className="w-full rounded-lg border px-3 py-2.5 text-sm text-white placeholder-white/20 outline-none transition-colors focus:border-white/30"
+      style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' }}
+    />
+  );
+}
+
+function SaveButton({ onClick, saving, saved }: { onClick: () => void; saving: boolean; saved: boolean }) {
+  return (
+    <div className="flex items-center gap-3 mt-3">
+      <button
+        onClick={onClick}
+        disabled={saving}
+        className="px-5 py-2 rounded-lg text-xs font-semibold transition-all duration-150 disabled:opacity-40"
+        style={{ background: ACCENT, color: '#0A0A0A' }}
+      >
+        {saving ? 'Сохранение...' : 'Сохранить'}
+      </button>
+      {saved && <span className="text-xs" style={{ color: ACCENT }}>Сохранено</span>}
+    </div>
+  );
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function BrandDetailPage() {
   const params = useParams();
@@ -34,13 +105,47 @@ export default function BrandDetailPage() {
   const [brand, setBrand] = useState<Brand | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
-  const [form, setForm] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [projects, setProjects] = useState<any[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
 
+  // ── Section form states ──
+  // 1. Basics
+  const [name, setName] = useState('');
+  const [website, setWebsite] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [mission, setMission] = useState('');
+  const [parsingSite, setParsingSite] = useState(false);
+
+  // 2. Audience
+  const [audience, setAudience] = useState('');
+  const [pains, setPains] = useState('');
+  const [audiencePlatforms, setAudiencePlatforms] = useState<string[]>([]);
+
+  // 3. Competitors
+  const [competitors, setCompetitors] = useState<string[]>([]);
+  const [newCompetitor, setNewCompetitor] = useState('');
+  const [differentiator, setDifferentiator] = useState('');
+
+  // 4. Visual
+  const [colors, setColors] = useState<string[]>([]);
+  const [visualStyle, setVisualStyle] = useState('');
+  const colorInputRef = useRef<HTMLInputElement>(null);
+
+  // 5. Communication
+  const [toneOfVoice, setToneOfVoice] = useState('');
+  const [keyMessages, setKeyMessages] = useState('');
+  const [forbidden, setForbidden] = useState('');
+
+  // Save state per section
+  const [savingSection, setSavingSection] = useState<string | null>(null);
+  const [savedSection, setSavedSection] = useState<string | null>(null);
+
+  // Logo upload
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Load brand ──
   useEffect(() => {
     fetch('/api/brands')
       .then((r) => r.json())
@@ -48,20 +153,33 @@ export default function BrandDetailPage() {
         const found = (data.brands ?? []).find((b: Brand) => b.id === brandId);
         if (found) {
           setBrand(found);
-          setForm({
-            name: found.name || '',
-            website: found.website || '',
-            audience: found.audience || '',
-            utp: found.utp || '',
-            tone_of_voice: found.tone_of_voice || '',
-            context: found.context || '',
-          });
+          populateForm(found);
         }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [brandId]);
 
+  function populateForm(b: Brand) {
+    setName(b.name || '');
+    setWebsite(b.website || '');
+    setLogoUrl(b.logo_url || '');
+    setAudience(b.audience || '');
+    setToneOfVoice(b.tone_of_voice || '');
+    setColors(b.colors ?? []);
+
+    const m = b.meta ?? {};
+    setMission(m.mission || '');
+    setPains(m.pains || '');
+    setAudiencePlatforms(m.platforms || []);
+    setCompetitors(m.competitors || []);
+    setDifferentiator(m.differentiator || '');
+    setVisualStyle(m.visual_style || '');
+    setKeyMessages(m.key_messages || '');
+    setForbidden(m.forbidden || '');
+  }
+
+  // ── Load projects ──
   useEffect(() => {
     setProjectsLoading(true);
     fetch('/api/projects')
@@ -74,35 +192,156 @@ export default function BrandDetailPage() {
       .finally(() => setProjectsLoading(false));
   }, [brandId]);
 
-  async function handleSave() {
-    if (!form.name?.trim()) return;
-    setSaving(true);
-    setSaved(false);
+  // ── Save section ──
+  async function saveSection(sectionId: string, payload: Record<string, unknown>) {
+    setSavingSection(sectionId);
+    setSavedSection(null);
     try {
       const res = await fetch(`/api/brands/${brandId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: form.name.trim(),
-          website: form.website?.trim() || null,
-          audience: form.audience?.trim() || null,
-          utp: form.utp?.trim() || null,
-          tone_of_voice: form.tone_of_voice?.trim() || null,
-          context: form.context?.trim() || null,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (data.brand) {
         setBrand(data.brand);
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2000);
+        setSavedSection(sectionId);
+        setTimeout(() => setSavedSection(null), 2000);
       }
     } catch {
       // ignore
     } finally {
-      setSaving(false);
+      setSavingSection(null);
     }
   }
+
+  function buildMeta(): BrandMeta {
+    return {
+      mission: mission.trim() || undefined,
+      pains: pains.trim() || undefined,
+      platforms: audiencePlatforms.length > 0 ? audiencePlatforms : undefined,
+      competitors: competitors.length > 0 ? competitors : undefined,
+      differentiator: differentiator.trim() || undefined,
+      visual_style: visualStyle.trim() || undefined,
+      key_messages: keyMessages.trim() || undefined,
+      forbidden: forbidden.trim() || undefined,
+    };
+  }
+
+  function handleSaveBasics() {
+    if (!name.trim()) return;
+    saveSection('basics', {
+      name: name.trim(),
+      website: website.trim() || null,
+      logo_url: logoUrl.trim() || null,
+      meta: { ...brand?.meta, mission: mission.trim() || undefined },
+    });
+  }
+
+  function handleSaveAudience() {
+    saveSection('audience', {
+      audience: audience.trim() || null,
+      meta: { ...brand?.meta, pains: pains.trim() || undefined, platforms: audiencePlatforms.length > 0 ? audiencePlatforms : undefined },
+    });
+  }
+
+  function handleSaveCompetitors() {
+    saveSection('competitors', {
+      meta: { ...brand?.meta, competitors: competitors.length > 0 ? competitors : undefined, differentiator: differentiator.trim() || undefined },
+    });
+  }
+
+  function handleSaveVisual() {
+    saveSection('visual', {
+      colors,
+      meta: { ...brand?.meta, visual_style: visualStyle.trim() || undefined },
+    });
+  }
+
+  function handleSaveCommunication() {
+    saveSection('communication', {
+      tone_of_voice: toneOfVoice.trim() || null,
+      meta: { ...brand?.meta, key_messages: keyMessages.trim() || undefined, forbidden: forbidden.trim() || undefined },
+    });
+  }
+
+  // ── Parse site ──
+  async function handleParseSite() {
+    if (!website.trim()) return;
+    setParsingSite(true);
+    try {
+      const res = await fetch(`/api/brands/parse-site?url=${encodeURIComponent(website.trim())}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      if (data.title && !name.trim()) setName(data.title);
+      if (data.description && !mission.trim()) setMission(data.description);
+      if (data.colors?.length && colors.length === 0) setColors(data.colors);
+    } catch {
+      // silent
+    } finally {
+      setParsingSite(false);
+    }
+  }
+
+  // ── Fetch colors from site ──
+  async function handleFetchColors() {
+    if (!website.trim()) return;
+    setParsingSite(true);
+    try {
+      const res = await fetch(`/api/brands/parse-site?url=${encodeURIComponent(website.trim())}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      if (data.colors?.length) setColors(data.colors);
+    } catch {
+      // silent
+    } finally {
+      setParsingSite(false);
+    }
+  }
+
+  // ── Logo upload ──
+  async function handleLogoUpload(file: File) {
+    if (!file.type.startsWith('image/')) return;
+    setUploadingLogo(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/upload-photo', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.url) {
+        setLogoUrl(data.url);
+      }
+    } catch {
+      // silent
+    } finally {
+      setUploadingLogo(false);
+    }
+  }
+
+  // ── Colors helpers ──
+  function addColor(c: string) {
+    if (colors.length >= 5) return;
+    const upper = c.toUpperCase();
+    if (!colors.includes(upper)) setColors([...colors, upper]);
+  }
+
+  function removeColor(idx: number) {
+    setColors(colors.filter((_, i) => i !== idx));
+  }
+
+  // ── Competitors helpers ──
+  function addCompetitor() {
+    const val = newCompetitor.trim();
+    if (!val || competitors.includes(val)) return;
+    setCompetitors([...competitors, val]);
+    setNewCompetitor('');
+  }
+
+  function removeCompetitor(idx: number) {
+    setCompetitors(competitors.filter((_, i) => i !== idx));
+  }
+
+  // ── Render ──────────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -166,7 +405,7 @@ export default function BrandDetailPage() {
           })}
         </div>
 
-        {/* Tab content */}
+        {/* ══════ Overview ══════ */}
         {activeTab === 'overview' && (
           <div
             className="rounded-xl border p-8 text-center"
@@ -176,6 +415,7 @@ export default function BrandDetailPage() {
           </div>
         )}
 
+        {/* ══════ Projects ══════ */}
         {activeTab === 'projects' && (
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -241,6 +481,7 @@ export default function BrandDetailPage() {
           </div>
         )}
 
+        {/* ══════ Banners ══════ */}
         {activeTab === 'banners' && (
           <div
             className="rounded-xl border p-8 text-center"
@@ -250,55 +491,257 @@ export default function BrandDetailPage() {
           </div>
         )}
 
+        {/* ══════ Settings ══════ */}
         {activeTab === 'settings' && (
-          <div
-            className="rounded-xl border p-6"
-            style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
-          >
-            <h3 className="text-white font-semibold text-base mb-5">Редактирование бренда</h3>
-            <div className="flex flex-col gap-4 max-w-lg">
-              {FIELDS.map((field) => (
-                <div key={field.key}>
-                  <label className="block text-white/50 text-xs font-medium mb-1.5">
-                    {field.label}
-                    {field.key === 'name' && <span style={{ color: ACCENT }}> *</span>}
-                  </label>
-                  {field.multiline ? (
-                    <textarea
-                      value={form[field.key] ?? ''}
-                      onChange={(e) => setForm((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                      placeholder={field.placeholder}
-                      rows={3}
-                      className="w-full rounded-lg border px-3 py-2.5 text-sm text-white placeholder-white/20 outline-none transition-colors focus:border-white/30"
-                      style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' }}
-                    />
-                  ) : (
+          <div className="flex flex-col gap-4">
+
+            {/* ─── Section 1: Basics ─── */}
+            <SectionCard title="Основы" defaultOpen={true}>
+              <div className="flex flex-col gap-4 pt-4 max-w-lg">
+                <div>
+                  <FieldLabel required>Название бренда</FieldLabel>
+                  <TextInput value={name} onChange={setName} placeholder="Nike, Яндекс..." />
+                </div>
+
+                <div>
+                  <FieldLabel>Сайт</FieldLabel>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <TextInput value={website} onChange={setWebsite} placeholder="https://..." />
+                    </div>
+                    <button
+                      onClick={handleParseSite}
+                      disabled={!website.trim() || parsingSite}
+                      className="px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150 disabled:opacity-30 whitespace-nowrap"
+                      style={{ background: 'rgba(200,255,0,0.1)', color: ACCENT }}
+                    >
+                      {parsingSite ? '...' : 'Загрузить с сайта'}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <FieldLabel>Логотип</FieldLabel>
+                  <div className="flex items-center gap-3">
+                    {logoUrl ? (
+                      <div className="relative">
+                        <img
+                          src={logoUrl}
+                          alt="Logo"
+                          className="w-16 h-16 rounded-lg object-contain border"
+                          style={{ borderColor: 'rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)' }}
+                        />
+                        <button
+                          onClick={() => setLogoUrl('')}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] text-white/60 hover:text-white"
+                          style={{ background: 'rgba(255,0,0,0.5)' }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => logoInputRef.current?.click()}
+                        disabled={uploadingLogo}
+                        className="w-16 h-16 rounded-lg border-2 border-dashed flex items-center justify-center text-white/20 hover:text-white/40 hover:border-white/20 transition-colors text-xl"
+                        style={{ borderColor: 'rgba(255,255,255,0.1)' }}
+                      >
+                        {uploadingLogo ? '...' : '+'}
+                      </button>
+                    )}
                     <input
-                      type="text"
-                      value={form[field.key] ?? ''}
-                      onChange={(e) => setForm((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                      placeholder={field.placeholder}
-                      className="w-full rounded-lg border px-3 py-2.5 text-sm text-white placeholder-white/20 outline-none transition-colors focus:border-white/30"
-                      style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' }}
+                      ref={logoInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => { if (e.target.files?.[0]) handleLogoUpload(e.target.files[0]); }}
                     />
+                    <p className="text-white/20 text-xs">PNG, JPG, SVG</p>
+                  </div>
+                </div>
+
+                <div>
+                  <FieldLabel>Миссия / позиционирование</FieldLabel>
+                  <TextArea value={mission} onChange={setMission} placeholder="Чем бренд полезен миру..." />
+                </div>
+
+                <SaveButton onClick={handleSaveBasics} saving={savingSection === 'basics'} saved={savedSection === 'basics'} />
+              </div>
+            </SectionCard>
+
+            {/* ─── Section 2: Audience ─── */}
+            <SectionCard title="Аудитория">
+              <div className="flex flex-col gap-4 pt-4 max-w-lg">
+                <div>
+                  <FieldLabel>Целевая аудитория</FieldLabel>
+                  <TextArea value={audience} onChange={setAudience} placeholder="Мужчины 25-35, предприниматели..." />
+                </div>
+
+                <div>
+                  <FieldLabel>Боли и желания</FieldLabel>
+                  <TextArea value={pains} onChange={setPains} placeholder="Какие проблемы решаем, чего хочет аудитория..." />
+                </div>
+
+                <div>
+                  <FieldLabel>Где обитают</FieldLabel>
+                  <div className="flex flex-wrap gap-1.5">
+                    {AUDIENCE_PLATFORMS.map((p) => {
+                      const selected = audiencePlatforms.includes(p);
+                      return (
+                        <button
+                          key={p}
+                          onClick={() => setAudiencePlatforms(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p])}
+                          className="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
+                          style={{
+                            background: selected ? 'rgba(200,255,0,0.15)' : 'rgba(255,255,255,0.05)',
+                            color: selected ? ACCENT : 'rgba(255,255,255,0.5)',
+                            border: `1px solid ${selected ? 'rgba(200,255,0,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                          }}
+                        >
+                          {p}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <SaveButton onClick={handleSaveAudience} saving={savingSection === 'audience'} saved={savedSection === 'audience'} />
+              </div>
+            </SectionCard>
+
+            {/* ─── Section 3: Competitors ─── */}
+            <SectionCard title="Конкуренты">
+              <div className="flex flex-col gap-4 pt-4 max-w-lg">
+                <div>
+                  <FieldLabel>Список конкурентов</FieldLabel>
+                  <div className="flex gap-2 mb-2">
+                    <div className="flex-1">
+                      <TextInput
+                        value={newCompetitor}
+                        onChange={setNewCompetitor}
+                        placeholder="Название конкурента..."
+                      />
+                    </div>
+                    <button
+                      onClick={addCompetitor}
+                      disabled={!newCompetitor.trim()}
+                      className="px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-150 disabled:opacity-30"
+                      style={{ background: ACCENT, color: '#0A0A0A' }}
+                    >
+                      +
+                    </button>
+                  </div>
+                  {competitors.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {competitors.map((c, i) => (
+                        <span
+                          key={i}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium"
+                          style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.08)' }}
+                        >
+                          {c}
+                          <button
+                            onClick={() => removeCompetitor(i)}
+                            className="text-white/30 hover:text-red-400 transition-colors"
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      ))}
+                    </div>
                   )}
                 </div>
-              ))}
 
-              <div className="flex items-center gap-3 mt-2">
-                <button
-                  onClick={handleSave}
-                  disabled={saving || !form.name?.trim()}
-                  className="px-6 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 disabled:opacity-40"
-                  style={{ background: ACCENT, color: '#0A0A0A' }}
-                >
-                  {saving ? 'Сохранение...' : 'Сохранить'}
-                </button>
-                {saved && (
-                  <span className="text-sm" style={{ color: ACCENT }}>Сохранено</span>
-                )}
+                <div>
+                  <FieldLabel>Чем отличаемся от конкурентов</FieldLabel>
+                  <TextArea value={differentiator} onChange={setDifferentiator} placeholder="Наше ключевое отличие..." />
+                </div>
+
+                <SaveButton onClick={handleSaveCompetitors} saving={savingSection === 'competitors'} saved={savedSection === 'competitors'} />
               </div>
-            </div>
+            </SectionCard>
+
+            {/* ─── Section 4: Visual Style ─── */}
+            <SectionCard title="Визуальный стиль">
+              <div className="flex flex-col gap-4 pt-4 max-w-lg">
+                <div>
+                  <FieldLabel>Цвета бренда (до 5)</FieldLabel>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {colors.map((c, i) => (
+                      <div key={i} className="relative group">
+                        <div
+                          className="w-10 h-10 rounded-lg border cursor-pointer"
+                          style={{ background: c, borderColor: 'rgba(255,255,255,0.15)' }}
+                          title={c}
+                        />
+                        <button
+                          onClick={() => removeColor(i)}
+                          className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[8px] text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                          style={{ background: 'rgba(255,0,0,0.6)' }}
+                        >
+                          ✕
+                        </button>
+                        <p className="text-[9px] text-white/30 text-center mt-0.5">{c}</p>
+                      </div>
+                    ))}
+                    {colors.length < 5 && (
+                      <button
+                        onClick={() => colorInputRef.current?.click()}
+                        className="w-10 h-10 rounded-lg border-2 border-dashed flex items-center justify-center text-white/20 hover:text-white/40 hover:border-white/20 transition-colors text-lg"
+                        style={{ borderColor: 'rgba(255,255,255,0.1)' }}
+                      >
+                        +
+                      </button>
+                    )}
+                    <input
+                      ref={colorInputRef}
+                      type="color"
+                      className="hidden"
+                      onChange={(e) => addColor(e.target.value)}
+                    />
+                  </div>
+                  {website.trim() && (
+                    <button
+                      onClick={handleFetchColors}
+                      disabled={parsingSite}
+                      className="mt-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 disabled:opacity-30"
+                      style={{ background: 'rgba(200,255,0,0.1)', color: ACCENT }}
+                    >
+                      {parsingSite ? 'Загрузка...' : 'Взять цвета с сайта'}
+                    </button>
+                  )}
+                </div>
+
+                <div>
+                  <FieldLabel>Описание визуального стиля</FieldLabel>
+                  <TextArea value={visualStyle} onChange={setVisualStyle} placeholder="Минимализм, яркие акценты, нейтральный фон..." />
+                </div>
+
+                <SaveButton onClick={handleSaveVisual} saving={savingSection === 'visual'} saved={savedSection === 'visual'} />
+              </div>
+            </SectionCard>
+
+            {/* ─── Section 5: Communication ─── */}
+            <SectionCard title="Коммуникация">
+              <div className="flex flex-col gap-4 pt-4 max-w-lg">
+                <div>
+                  <FieldLabel>Tone of voice</FieldLabel>
+                  <TextArea value={toneOfVoice} onChange={setToneOfVoice} placeholder="Дружелюбный, экспертный, провокационный..." rows={2} />
+                </div>
+
+                <div>
+                  <FieldLabel>Ключевые сообщения</FieldLabel>
+                  <TextArea value={keyMessages} onChange={setKeyMessages} placeholder="Что бренд всегда транслирует..." />
+                </div>
+
+                <div>
+                  <FieldLabel>Запрещённые слова/образы</FieldLabel>
+                  <TextArea value={forbidden} onChange={setForbidden} placeholder="Что нельзя использовать в коммуникации..." rows={2} />
+                </div>
+
+                <SaveButton onClick={handleSaveCommunication} saving={savingSection === 'communication'} saved={savedSection === 'communication'} />
+              </div>
+            </SectionCard>
           </div>
         )}
       </div>
