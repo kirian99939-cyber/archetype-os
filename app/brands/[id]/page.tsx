@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import type { Brand } from '@/lib/brand-types';
 import DashboardShell from '@/components/DashboardShell';
+import NewProjectModal from '@/components/NewProjectModal';
 
 const ACCENT = '#C8FF00';
 
@@ -38,6 +39,7 @@ export default function BrandDetailPage() {
   const [saved, setSaved] = useState(false);
   const [projects, setProjects] = useState<any[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
+  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
 
   useEffect(() => {
     fetch('/api/brands')
@@ -179,7 +181,7 @@ export default function BrandDetailPage() {
             <div className="flex items-center justify-between mb-4">
               <p className="text-white/40 text-sm">Проекты бренда</p>
               <button
-                onClick={() => router.push(`/dashboard?page=new-project&brand_id=${brandId}`)}
+                onClick={() => setShowNewProjectModal(true)}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 hover:scale-[1.02]"
                 style={{ background: ACCENT, color: '#0A0A0A' }}
               >
@@ -300,6 +302,20 @@ export default function BrandDetailPage() {
           </div>
         )}
       </div>
+
+      {showNewProjectModal && brand && (
+        <NewProjectModal
+          brandId={brandId}
+          brandName={brand.name}
+          brandData={{
+            audience: brand.audience,
+            utp: brand.utp,
+            tone_of_voice: brand.tone_of_voice,
+            context: brand.context,
+          }}
+          onClose={() => setShowNewProjectModal(false)}
+        />
+      )}
     </DashboardShell>
   );
 }
