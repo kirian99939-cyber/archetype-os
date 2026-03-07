@@ -50,19 +50,48 @@ function buildSlidePrompt(
   platformStyle: string,
 ): string {
   const hasPhotos = body.photoUrls && body.photoUrls.length > 0;
+  const styleGuide = STYLE_PROMPTS[platformStyle] || platformStyle;
+  const photoInstruction = hasPhotos
+    ? 'Use the provided reference product photos as the main visual — show the actual product from the photos, do NOT invent or substitute a different product.'
+    : '';
+
+  // Уникальный промпт для каждого типа слайда
+  const slideRolePrompts: Record<string, string> = {
+    // Авито / маркетплейс
+    'Главное фото товара с ценой': `Hero shot: show the product prominently with price tag "${body.offer || ''}". Bold headline. Maximum visual impact. ${photoInstruction}`,
+    'Товар в использовании': `Lifestyle shot: show the product being actively used by a person from the target audience: ${body.audience}. Natural, relatable scene. No price, just the product experience. ${photoInstruction}`,
+    'Детали и характеристики': `Infographic slide: split layout showing product close-up details on one side and key specs as icons+text on the other. Features: ${body.characteristics || body.offer}. ${photoInstruction}`,
+    'Комплектация': `Flat-lay or exploded view: show all items included in the package laid out neatly. Label each component. ${photoInstruction}`,
+    'Сравнение / преимущества': `Comparison or benefits slide: left side "before" / problems, right side "after" / benefits. Use checkmarks and crosses. Product: ${body.product}. ${photoInstruction}`,
+    'Отзывы / социальное доказательство': `Social proof slide: show 2-3 customer review quotes with star ratings. Include a small product thumbnail. Text-heavy, trust-building layout. ${photoInstruction}`,
+    'Призыв к действию': `CTA slide: bold call-to-action button/banner. Offer: "${body.offer || 'Купить сейчас'}". Urgency elements (limited time / stock). Contact info if relevant. ${photoInstruction}`,
+    // Instagram
+    'Обложка — цепляющий заголовок': `Cover slide: ultra eye-catching headline that stops the scroll. Large bold typography. Minimal imagery, maximum text impact. Topic: ${body.product}. ${photoInstruction}`,
+    'Проблема / боль аудитории': `Problem slide: visualise the pain point of ${body.audience}. Empathetic tone, relatable situation. No product yet — just the problem. Text-dominant.`,
+    'Решение': `Solution reveal slide: introduce ${body.product} as the answer to the problem. Before/after or problem→solution layout. ${photoInstruction}`,
+    'Доказательство / результат': `Proof slide: show results, statistics, or testimonials. Data visualisation, charts, or quote cards. Trust-building. ${photoInstruction}`,
+    'Последний слайд — CTA': `Final CTA slide: clear next step for the reader. What to do now: "${body.offer || 'Подписывайся / Купи / Напиши'}". Bold, actionable, urgent. ${photoInstruction}`,
+  };
+
+  // Ищем точное совпадение или используем позиционный промпт
+  const rolePrompt = slideRolePrompts[slideDesc] || `${slideDesc}: ${body.product}. ${photoInstruction}`;
+
+  // Позиционные усилители
+  const positionHint = slideIndex === 0
+    ? 'HERO SLIDE — must be the most attention-grabbing, high-impact visual of the entire sequence.'
+    : slideIndex === totalSlides - 1
+    ? 'FINAL SLIDE — end with a strong call to action, summarise the key benefit.'
+    : `Slide ${slideIndex + 1} of ${totalSlides} — maintain visual consistency with previous slides but vary the composition.`;
+
   return [
-    `Advertising slide ${slideIndex + 1} of ${totalSlides} for a photo funnel.`,
-    `Slide purpose: ${slideDesc}.`,
+    `Create advertising slide ${slideIndex + 1} of ${totalSlides} for a photo funnel.`,
+    positionHint,
+    rolePrompt,
     `Product: ${body.product}.`,
-    body.offer ? `Key offer: ${body.offer}.` : '',
-    body.characteristics ? `Key features: ${body.characteristics}.` : '',
     `Target audience: ${body.audience}.`,
-    `Visual style: ${STYLE_PROMPTS[platformStyle] || platformStyle}.`,
-    hasPhotos ? 'Incorporate the provided reference product photos naturally into the composition — use them as key visual elements.' : '',
-    'High quality, commercial advertising photography, professional graphic design.',
+    `Visual style: ${styleGuide}`,
+    'High quality commercial advertising. Professional graphic design.',
     'IMPORTANT: All text on the slide must be ONLY in Russian language.',
-    slideIndex === 0 ? 'This is the HERO slide — make it the most eye-catching and attention-grabbing.' : '',
-    slideIndex === totalSlides - 1 ? 'This is the FINAL CTA slide — include a clear call to action.' : '',
   ].filter(Boolean).join(' ');
 }
 

@@ -271,6 +271,7 @@ function FunnelContent() {
           audience: audience.trim(),
           offer: offer.trim(),
           characteristics: characteristics.trim(),
+          photoUrls: photoUrls.length > 0 ? photoUrls : undefined,
         }),
       });
 
