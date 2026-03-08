@@ -1,4 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getToken } from 'next-auth/jwt';
+import { supabaseAdmin } from '@/lib/supabase';
+
+async function saveSlideToStorage(imageUrl: string, userId: string): Promise<string> {
+  try {
+    const response = await fetch(imageUrl);
+    if (!response.ok) return imageUrl;
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const fileName = `${userId}/${Date.now()}-slide.jpg`;
+
+    const { data, error } = await supabaseAdmin.storage
+      .from('funnel-slides')
+      .upload(fileName, buffer, {
+        contentType: 'image/jpeg',
+        upsert: false,
+      });
+
+    if (error || !data) return imageUrl;
+
+    const { data: { publicUrl } } = supabaseAdmin.storage
+      .from('funnel-slides')
+      .getPublicUrl(fileName);
+
+    return publicUrl;
+  } catch {
+    return imageUrl;
+  }
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -37,8 +66,24 @@ export async function GET(req: NextRequest) {
     const statusData = await res.json();
     console.log('[NanoBanana] record-info full response:', JSON.stringify(statusData, null, 2));
 
-    const imageUrl = statusData.data?.response?.resultImageUrl || statusData.data?.result_urls?.[0];
+    let imageUrl = statusData.data?.response?.resultImageUrl || statusData.data?.result_urls?.[0];
     const isReady = !!imageUrl && statusData.data?.successFlag === 1;
+
+    // Save to Supabase Storage for permanent URL
+    if (isReady && imageUrl) {
+      const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+      if (token?.email) {
+        const { data: dbUser } = await supabaseAdmin
+          .from('users')
+          .select('id')
+          .eq('email', token.email)
+          .maybeSingle();
+
+        if (dbUser) {
+          imageUrl = await saveSlideToStorage(imageUrl, dbUser.id);
+        }
+      }
+    }
 
     return NextResponse.json({ ready: isReady, imageUrl });
   } catch (error) {

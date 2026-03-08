@@ -4,6 +4,33 @@ import { supabaseAdmin, spendCredits } from '@/lib/supabase';
 import { PLATFORM_CONFIG } from '@/lib/funnel-types';
 import type { FunnelPlatform, InstagramSubtype } from '@/lib/funnel-types';
 
+async function saveSlideToStorage(imageUrl: string, userId: string, slideIndex: number): Promise<string> {
+  try {
+    const response = await fetch(imageUrl);
+    if (!response.ok) return imageUrl;
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const fileName = `${userId}/${Date.now()}-slide-${slideIndex}.jpg`;
+
+    const { data, error } = await supabaseAdmin.storage
+      .from('funnel-slides')
+      .upload(fileName, buffer, {
+        contentType: 'image/jpeg',
+        upsert: false,
+      });
+
+    if (error || !data) return imageUrl;
+
+    const { data: { publicUrl } } = supabaseAdmin.storage
+      .from('funnel-slides')
+      .getPublicUrl(fileName);
+
+    return publicUrl;
+  } catch {
+    return imageUrl;
+  }
+}
+
 interface FunnelRequest {
   platform: FunnelPlatform;
   subtype?: InstagramSubtype;
