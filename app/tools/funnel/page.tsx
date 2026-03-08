@@ -589,6 +589,13 @@ function FunnelContent() {
                   <label className="block text-white/50 text-xs font-medium mb-1.5">Ваши фото товара</label>
                   <p className="text-white/20 text-[10px] mb-2">Загрузите фото товара — AI использует их как основу для слайдов</p>
 
+                  <div className="flex items-start gap-2 mb-3 px-3 py-2.5 rounded-lg" style={{ background: 'rgba(200,255,0,0.06)', border: '1px solid rgba(200,255,0,0.15)' }}>
+                    <span className="text-base shrink-0">✨</span>
+                    <p className="text-xs" style={{ color: 'rgba(200,255,0,0.7)' }}>
+                      Загрузите фото — AI распознает продукт и автоматически заполнит поля ниже
+                    </p>
+                  </div>
+
                   {/* Drop zone */}
                   <div
                     className="rounded-lg border-2 border-dashed p-4 text-center transition-colors cursor-pointer"
