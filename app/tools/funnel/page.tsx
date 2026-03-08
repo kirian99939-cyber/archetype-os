@@ -584,62 +584,6 @@ function FunnelContent() {
                   </div>
                 </div>
 
-                {/* Product */}
-                <div>
-                  <label className="block text-white/50 text-xs font-medium mb-1.5">
-                    Продукт / тема <span style={{ color: ACCENT }}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={product}
-                    onChange={(e) => setProduct(e.target.value)}
-                    placeholder="Что продаём или о чём пост..."
-                    className="w-full rounded-lg border px-3 py-2.5 text-sm text-white placeholder-white/20 outline-none transition-colors focus:border-white/30"
-                    style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' }}
-                  />
-                </div>
-
-                {/* Audience */}
-                <div>
-                  <label className="block text-white/50 text-xs font-medium mb-1.5">
-                    Целевая аудитория <span style={{ color: ACCENT }}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={audience}
-                    onChange={(e) => setAudience(e.target.value)}
-                    placeholder="Кто целевая аудитория..."
-                    className="w-full rounded-lg border px-3 py-2.5 text-sm text-white placeholder-white/20 outline-none transition-colors focus:border-white/30"
-                    style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' }}
-                  />
-                </div>
-
-                {/* Offer */}
-                <div>
-                  <label className="block text-white/50 text-xs font-medium mb-1.5">Оффер / ключевое сообщение</label>
-                  <textarea
-                    value={offer}
-                    onChange={(e) => setOffer(e.target.value)}
-                    placeholder="Скидка 30%, бесплатная доставка..."
-                    rows={2}
-                    className="w-full rounded-lg border px-3 py-2.5 text-sm text-white placeholder-white/20 outline-none transition-colors focus:border-white/30"
-                    style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' }}
-                  />
-                </div>
-
-                {/* Characteristics */}
-                <div>
-                  <label className="block text-white/50 text-xs font-medium mb-1.5">Ключевые характеристики</label>
-                  <textarea
-                    value={characteristics}
-                    onChange={(e) => setCharacteristics(e.target.value)}
-                    placeholder="Размер, материал, особенности..."
-                    rows={2}
-                    className="w-full rounded-lg border px-3 py-2.5 text-sm text-white placeholder-white/20 outline-none transition-colors focus:border-white/30"
-                    style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' }}
-                  />
-                </div>
-
                 {/* Photo upload */}
                 <div>
                   <label className="block text-white/50 text-xs font-medium mb-1.5">Ваши фото товара</label>
@@ -735,6 +679,62 @@ function FunnelContent() {
                       </div>
                     </div>
                   )}
+                </div>
+
+                {/* Product */}
+                <div>
+                  <label className="block text-white/50 text-xs font-medium mb-1.5">
+                    Продукт / тема <span style={{ color: ACCENT }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={product}
+                    onChange={(e) => setProduct(e.target.value)}
+                    placeholder="Что продаём или о чём пост..."
+                    className="w-full rounded-lg border px-3 py-2.5 text-sm text-white placeholder-white/20 outline-none transition-colors focus:border-white/30"
+                    style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' }}
+                  />
+                </div>
+
+                {/* Audience */}
+                <div>
+                  <label className="block text-white/50 text-xs font-medium mb-1.5">
+                    Целевая аудитория <span style={{ color: ACCENT }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={audience}
+                    onChange={(e) => setAudience(e.target.value)}
+                    placeholder="Кто целевая аудитория..."
+                    className="w-full rounded-lg border px-3 py-2.5 text-sm text-white placeholder-white/20 outline-none transition-colors focus:border-white/30"
+                    style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' }}
+                  />
+                </div>
+
+                {/* Offer */}
+                <div>
+                  <label className="block text-white/50 text-xs font-medium mb-1.5">Оффер / ключевое сообщение</label>
+                  <textarea
+                    value={offer}
+                    onChange={(e) => setOffer(e.target.value)}
+                    placeholder="Скидка 30%, бесплатная доставка..."
+                    rows={2}
+                    className="w-full rounded-lg border px-3 py-2.5 text-sm text-white placeholder-white/20 outline-none transition-colors focus:border-white/30"
+                    style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' }}
+                  />
+                </div>
+
+                {/* Characteristics */}
+                <div>
+                  <label className="block text-white/50 text-xs font-medium mb-1.5">Ключевые характеристики</label>
+                  <textarea
+                    value={characteristics}
+                    onChange={(e) => setCharacteristics(e.target.value)}
+                    placeholder="Размер, материал, особенности..."
+                    rows={2}
+                    className="w-full rounded-lg border px-3 py-2.5 text-sm text-white placeholder-white/20 outline-none transition-colors focus:border-white/30"
+                    style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' }}
+                  />
                 </div>
 
                 {/* Slide preview */}
