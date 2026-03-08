@@ -56,6 +56,12 @@ function FunnelContent() {
   const [photoDragOver, setPhotoDragOver] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
+  // Photo analysis
+  const [photoSuggestion, setPhotoSuggestion] = useState<{
+    product: string; audience: string; offer: string; characteristics: string;
+  } | null>(null);
+  const [analyzingPhoto, setAnalyzingPhoto] = useState(false);
+
   // Step 3
   const [slides, setSlides] = useState<SlideResult[]>([]);
   const [savedProjectId, setSavedProjectId] = useState<string | null>(null);
@@ -101,6 +107,24 @@ function FunnelContent() {
     }
   };
 
+  // Analyze photo with Claude Vision
+  const analyzePhoto = async (url: string) => {
+    setAnalyzingPhoto(true);
+    try {
+      const res = await fetch('/api/analyze-product-photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrl: url }),
+      });
+      const data = await res.json();
+      if (data.product) setPhotoSuggestion(data);
+    } catch {
+      // silent
+    } finally {
+      setAnalyzingPhoto(false);
+    }
+  };
+
   // Photo upload
   const uploadFiles = async (files: FileList | File[]) => {
     const fileArray = Array.from(files).filter((f) => f.type.startsWith('image/'));
@@ -109,7 +133,9 @@ function FunnelContent() {
     const toUpload = fileArray.slice(0, remaining);
     if (toUpload.length === 0) return;
 
+    const hadPhotos = photoUrls.length > 0;
     setPhotoUploading(true);
+    let firstNewUrl: string | null = null;
     for (const file of toUpload) {
       try {
         const formData = new FormData();
@@ -117,6 +143,7 @@ function FunnelContent() {
         const res = await fetch('/api/upload-photo', { method: 'POST', body: formData });
         const data = await res.json();
         if (data.url) {
+          if (!firstNewUrl) firstNewUrl = data.url;
           setPhotoUrls((prev) => [...prev, data.url]);
         }
       } catch {
@@ -124,6 +151,11 @@ function FunnelContent() {
       }
     }
     setPhotoUploading(false);
+
+    // Auto-analyze first photo if this is the first upload
+    if (!hadPhotos && firstNewUrl && !photoSuggestion) {
+      analyzePhoto(firstNewUrl);
+    }
   };
 
   const removePhoto = (idx: number) => {
@@ -662,6 +694,45 @@ function FunnelContent() {
                           </button>
                         </div>
                       ))}
+                    </div>
+                  )}
+
+                  {/* Photo analysis loading */}
+                  {analyzingPhoto && (
+                    <div className="mt-4 p-4 rounded-xl border border-white/10 text-white/50 text-sm animate-pulse">
+                      🔍 Анализируем фото продукта...
+                    </div>
+                  )}
+
+                  {/* Photo analysis suggestion */}
+                  {photoSuggestion && !analyzingPhoto && (
+                    <div className="mt-4 p-4 rounded-xl border border-yellow-500/30 bg-yellow-500/5">
+                      <p className="text-yellow-400 text-xs font-semibold uppercase tracking-wider mb-2">✨ Мы распознали продукт</p>
+                      <p className="text-white text-sm mb-1"><span className="text-white/40">Продукт:</span> {photoSuggestion.product}</p>
+                      <p className="text-white text-sm mb-1"><span className="text-white/40">Аудитория:</span> {photoSuggestion.audience}</p>
+                      <p className="text-white text-sm mb-1"><span className="text-white/40">Оффер:</span> {photoSuggestion.offer}</p>
+                      <p className="text-white text-sm mb-3"><span className="text-white/40">Характеристики:</span> {photoSuggestion.characteristics}</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setProduct(photoSuggestion.product);
+                            setAudience(photoSuggestion.audience);
+                            setOffer(photoSuggestion.offer);
+                            setCharacteristics(photoSuggestion.characteristics);
+                            setPhotoSuggestion(null);
+                          }}
+                          className="px-4 py-2 rounded-lg text-sm font-medium"
+                          style={{ background: '#C8FF00', color: '#0A0A0A' }}
+                        >
+                          Использовать →
+                        </button>
+                        <button
+                          onClick={() => setPhotoSuggestion(null)}
+                          className="px-4 py-2 rounded-lg text-sm font-medium text-white/40 hover:text-white"
+                        >
+                          Пропустить
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
